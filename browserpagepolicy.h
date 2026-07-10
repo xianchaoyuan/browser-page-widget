@@ -1,4 +1,4 @@
-#ifndef BROWSERPAGEPOLICY_H
+﻿#ifndef BROWSERPAGEPOLICY_H
 #define BROWSERPAGEPOLICY_H
 
 #include "browserpagewidgetglobal.h"
@@ -15,7 +15,7 @@ namespace bm {
  *
  * 该类不依赖 QWidget 或 WebEngine 进程，可独立用于配置校验和单元测试。
  */
-class BROWSERPAGEWIDGET_EXPORT BrowserPagePolicy final
+class BROWSERPAGEWIDGET_PUBLIC BrowserPagePolicy final
 {
 public:
     /**

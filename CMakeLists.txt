@@ -1,4 +1,4 @@
-﻿cmake_minimum_required(VERSION 3.21)
+cmake_minimum_required(VERSION 3.21)
 
 project(BrowserPageWidget VERSION 2.0.0 LANGUAGES CXX)
 
@@ -16,6 +16,17 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 
+foreach(CONFIG_TYPE Debug Release RelWithDebInfo MinSizeRel)
+    string(TOUPPER "${CONFIG_TYPE}" CONFIG_TYPE_UPPER)
+    set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_${CONFIG_TYPE_UPPER} ${PROJECT_SOURCE_DIR}/bin/${CONFIG_TYPE})
+    set(CMAKE_LIBRARY_OUTPUT_DIRECTORY_${CONFIG_TYPE_UPPER} ${PROJECT_SOURCE_DIR}/bin/${CONFIG_TYPE})
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_${CONFIG_TYPE_UPPER} ${PROJECT_SOURCE_DIR}/bin/${CONFIG_TYPE})
+endforeach()
+
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/bin)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/bin)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/bin)
+
 if(BROWSER_PAGE_WIDGET_QT_ROOT)
     list(PREPEND CMAKE_PREFIX_PATH "${BROWSER_PAGE_WIDGET_QT_ROOT}")
 endif()
@@ -26,7 +37,7 @@ find_package(Qt6 REQUIRED COMPONENTS
     WebEngineWidgets
 )
 
-add_library(browserpagewidget
+add_library(browserpagewidget SHARED
     browserpagewidget.h
     browserpagewidget.cpp
     browserpagewidgetglobal.h
@@ -56,11 +67,10 @@ target_link_libraries(browserpagewidget
     Qt6::WebEngineWidgets
 )
 
-if(BUILD_SHARED_LIBS)
-    target_compile_definitions(browserpagewidget PRIVATE BROWSERPAGEWIDGET_LIBRARY)
-else()
-    target_compile_definitions(browserpagewidget PUBLIC BROWSERPAGEWIDGET_STATIC)
-endif()
+target_compile_definitions(browserpagewidget
+    PRIVATE
+        BROWSERPAGEWIDGET_LIBRARY
+)
 
 if(MSVC)
     target_compile_options(browserpagewidget PRIVATE /utf-8 /W4 /permissive-)
@@ -126,3 +136,5 @@ message(STATUS "Qt version: ${Qt6Core_VERSION}")
 if(BROWSER_PAGE_WIDGET_QT_ROOT)
     message(STATUS "Qt root hint: ${BROWSER_PAGE_WIDGET_QT_ROOT}")
 endif()
+
+

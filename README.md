@@ -97,7 +97,8 @@ build/Debug/BrowserPageWidgetDemo.exe
 | --- | --- | --- |
 | `BROWSER_PAGE_WIDGET_BUILD_DEMO` | `ON` | 是否编译 Demo 程序 |
 | `BROWSER_PAGE_WIDGET_QT_ROOT` | 空 | 可选 Qt 6 安装目录提示 |
-| `BUILD_SHARED_LIBS` | CMake 默认值 | 控制生成静态库或动态库 |
+
+当前项目固定生成动态库，不再通过 `BUILD_SHARED_LIBS` 切换静态库。
 
 示例：只编译库，不编译 Demo：
 
@@ -106,12 +107,6 @@ cmake -S . -B build -DBROWSER_PAGE_WIDGET_BUILD_DEMO=OFF
 cmake --build build --config Release
 ```
 
-示例：生成动态库：
-
-```powershell
-cmake -S . -B build -DBUILD_SHARED_LIBS=ON
-cmake --build build --config Release
-```
 
 ## Demo 说明
 
@@ -419,17 +414,21 @@ browserpagewidget
 bm::browserpagewidget
 ```
 
-实际输出库名为：
+当前项目固定生成动态库。Windows 下通常会生成：
 
 ```text
-browserpagewidget
+browserpagewidget.dll
+browserpagewidget.lib
 ```
 
 Debug 配置下会带 `d` 后缀，例如：
 
 ```text
+browserpagewidgetd.dll
 browserpagewidgetd.lib
 ```
+
+其中 `.dll` 是运行时动态库，`.lib` 是链接动态库时使用的导入库，不是静态库。
 
 ## 注意事项
 
@@ -442,3 +441,4 @@ browserpagewidgetd.lib
 ## 许可证
 
 当前仓库未包含许可证文件。正式发布前建议补充 `LICENSE`。
+

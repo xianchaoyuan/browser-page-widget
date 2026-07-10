@@ -28,7 +28,7 @@ class BrowserPageWidgetPrivate;
  * 状态栏、加载超时、导航白名单、弹窗策略、下载策略、权限策略和证书策略。
  * 默认策略遵循最小权限原则：拒绝未知协议、证书错误、网页权限与下载。
  */
-class BROWSERPAGEWIDGET_EXPORT BrowserPageWidget final : public QWidget
+class BROWSERPAGEWIDGET_PUBLIC BrowserPageWidget final : public QWidget
 {
     Q_OBJECT
 
