@@ -30,6 +30,7 @@
   - `Widgets`
   - `WebEngineCore`
   - `WebEngineWidgets`
+  - `Network`（仅 `AgentPageViewer` 用于探测服务端口）
 
 当前项目不固定 Qt 小版本。只要你的环境能找到 Qt 6，并且安装了 Qt WebEngine，就可以配置。
 
@@ -39,6 +40,9 @@
 browser-page-widget/
 ├── CMakeLists.txt
 ├── main.cpp
+├── agentpage_main.cpp
+├── agentstartupsplash.h
+├── agentstartupsplash.cpp
 ├── browserpagewidget.h
 ├── browserpagewidget.cpp
 ├── browserpagewidget_p.h
@@ -65,6 +69,8 @@ browser-page-widget/
 | `browserdownloadmanager_p.h/.cpp` | 下载策略、保存路径和下载进度处理 |
 | `browserpagewidgetglobal.h` | 动态库导入导出宏 |
 | `main.cpp` | Demo 程序入口 |
+| `agentpage_main.cpp` | AgentPageViewer 程序入口，负责启动 OpenClaw 服务并显示 agent 页面 |
+| `agentstartupsplash.h/.cpp` | AgentPageViewer 启动画面，显示服务启动和页面加载状态 |
 | `cmake/BrowserPageWidgetConfig.cmake.in` | 安装后供 `find_package()` 使用的 CMake 配置模板 |
 
 ## 快速编译
@@ -86,7 +92,7 @@ cmake --build build --config Debug
 生成的 Demo 程序通常位于：
 
 ```text
-build/Debug/BrowserPageWidgetDemo.exe
+bin/Debug/BrowserPageWidgetDemo.exe
 ```
 
 如果使用的是 Visual Studio 多配置生成器，`Debug`、`Release` 会分别生成到对应配置目录。
@@ -96,6 +102,7 @@ build/Debug/BrowserPageWidgetDemo.exe
 | 选项 | 默认值 | 说明 |
 | --- | --- | --- |
 | `BROWSER_PAGE_WIDGET_BUILD_DEMO` | `ON` | 是否编译 Demo 程序 |
+| `BROWSER_PAGE_WIDGET_BUILD_AGENT_VIEWER` | `ON` | 是否编译 AgentPageViewer 程序 |
 | `BROWSER_PAGE_WIDGET_QT_ROOT` | 空 | 可选 Qt 6 安装目录提示 |
 
 当前项目固定生成动态库，不再通过 `BUILD_SHARED_LIBS` 切换静态库。
@@ -107,6 +114,32 @@ cmake -S . -B build -DBROWSER_PAGE_WIDGET_BUILD_DEMO=OFF
 cmake --build build --config Release
 ```
 
+
+## AgentPageViewer
+
+`AgentPageViewer` 是一个类似 Demo 的独立程序，用于直接显示 agent 页面。
+
+程序显示页面前会先检查目标地址是否已经可连接。如果还没有服务，它会自动启动：
+
+```text
+D:/mycode/browser-page-widget/bin/Release/openclaw-service/openclaw.cmd gateway
+```
+
+启动过程中会显示启动画面，提示当前正在检查服务、启动服务或等待服务就绪。启动后程序会等待最多 120 秒，等目标页面端口可连接后再加载网页。
+
+默认打开：
+
+```text
+http://127.0.0.1:19001/
+```
+
+也可以在启动时传入页面地址：
+
+```powershell
+AgentPageViewer.exe http://127.0.0.1:18801/__quantclaw__/control/chat?session=main
+```
+
+程序默认隐藏顶部工具栏，保留底部状态栏，并启用自动下载保存。页面加载完成、加载失败或加载超时时，启动画面会自动关闭。
 
 ## Demo 说明
 

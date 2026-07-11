@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.21)
 project(BrowserPageWidget VERSION 2.0.0 LANGUAGES CXX)
 
 option(BROWSER_PAGE_WIDGET_BUILD_DEMO "Build the BrowserPageWidget demo" ON)
+option(BROWSER_PAGE_WIDGET_BUILD_AGENT_VIEWER "Build the AgentPageViewer program" ON)
 set(BROWSER_PAGE_WIDGET_QT_ROOT "" CACHE PATH "Optional Qt 6 installation root")
 
 set(CMAKE_AUTOMOC ON)
@@ -36,6 +37,10 @@ find_package(Qt6 REQUIRED COMPONENTS
     WebEngineCore
     WebEngineWidgets
 )
+
+if(BROWSER_PAGE_WIDGET_BUILD_AGENT_VIEWER)
+    find_package(Qt6 REQUIRED COMPONENTS Network)
+endif()
 
 add_library(browserpagewidget SHARED
     browserpagewidget.h
@@ -94,6 +99,19 @@ if(BROWSER_PAGE_WIDGET_BUILD_DEMO)
     endif()
 endif()
 
+if(BROWSER_PAGE_WIDGET_BUILD_AGENT_VIEWER)
+    add_executable(AgentPageViewer WIN32
+        agentpage_main.cpp
+        agentstartupsplash.h
+        agentstartupsplash.cpp
+    )
+    target_link_libraries(AgentPageViewer PRIVATE bm::browserpagewidget Qt6::Network)
+
+    if(MSVC)
+        target_compile_options(AgentPageViewer PRIVATE /utf-8 /W4 /permissive-)
+    endif()
+endif()
+
 configure_package_config_file(
     cmake/BrowserPageWidgetConfig.cmake.in
     ${CMAKE_CURRENT_BINARY_DIR}/BrowserPageWidgetConfig.cmake
@@ -136,5 +154,4 @@ message(STATUS "Qt version: ${Qt6Core_VERSION}")
 if(BROWSER_PAGE_WIDGET_QT_ROOT)
     message(STATUS "Qt root hint: ${BROWSER_PAGE_WIDGET_QT_ROOT}")
 endif()
-
 
