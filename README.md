@@ -85,7 +85,7 @@ cmake --build build --config Debug
 如果 CMake 找不到 Qt，可以通过 `BROWSER_PAGE_WIDGET_QT_ROOT` 指定 Qt 安装目录：
 
 ```powershell
-cmake -S . -B build -DBROWSER_PAGE_WIDGET_QT_ROOT=D:/Qt/Qt6.11.1/6.11.1/msvc2022_64
+cmake -S . -B build -DBROWSER_PAGE_WIDGET_QT_ROOT=<Qt安装目录>
 cmake --build build --config Debug
 ```
 
@@ -119,13 +119,37 @@ cmake --build build --config Release
 
 `AgentPageViewer` 是一个类似 Demo 的独立程序，用于直接显示 agent 页面。
 
-程序显示页面前会先检查目标地址是否已经可连接。如果还没有服务，它会自动启动：
+程序显示页面前会先检查目标地址是否已经可连接。如果还没有服务，它会从程序目录附近查找并自动启动 OpenClaw 服务。
+
+推荐发布包结构：
 
 ```text
-D:/mycode/browser-page-widget/bin/Release/openclaw-service/openclaw.cmd gateway
+<发布目录>/
+├── AgentPageViewer.exe
+├── browserpagewidget.dll
+└── openclaw-service/
+    ├── openclaw.cmd
+    ├── runtime/
+    └── state/
 ```
 
-启动过程中会显示启动画面，提示当前正在检查服务、启动服务或等待服务就绪。启动后程序会等待最多 120 秒，等目标页面端口可连接后再加载网页。
+发布包中服务启动命令等价于：
+
+```text
+openclaw-service/openclaw.cmd gateway
+```
+
+开发调试时也兼容 `bin/Debug/AgentPageViewer.exe` 或 `bin/Release/AgentPageViewer.exe` 自动查找 `bin/dist/openclaw-service`。
+
+启动过程中会显示启动画面，提示当前正在检查服务、启动服务或等待服务就绪。程序通过 `cmd.exe /d /c openclaw.cmd gateway` 启动服务，工作目录为 `openclaw-service`。启动后程序会等待最多 120 秒，等目标页面端口可连接后再加载网页。
+
+程序启动时就会创建诊断日志，并记录应用目录、服务目录、目标 URL 和服务文件是否存在。默认日志路径为：
+
+```text
+openclaw-service/state/agentpageviewer-service.log
+```
+
+如果 `openclaw-service/state` 无法写入，会依次退到 `AgentPageViewer.exe` 同目录、本地应用数据目录、系统临时目录下的 `agentpageviewer-service.log`。
 
 默认打开：
 
@@ -166,7 +190,7 @@ browser.setDownloadPolicy(bm::BrowserPageWidget::DownloadPolicy::AutoSave);
 自动下载默认保存到系统下载目录，例如：
 
 ```text
-C:/Users/<用户名>/Downloads
+<用户下载目录>
 ```
 
 ## 在项目中直接引用
@@ -194,7 +218,7 @@ browser->loadUrl(browser->homeUrl());
 先安装库：
 
 ```powershell
-cmake -S . -B build -DCMAKE_INSTALL_PREFIX=D:/sdk/browserpagewidget
+cmake -S . -B build -DCMAKE_INSTALL_PREFIX=<安装目录>/browserpagewidget
 cmake --build build --config Release
 cmake --install build --config Release
 ```
@@ -202,7 +226,7 @@ cmake --install build --config Release
 其他项目中使用：
 
 ```cmake
-list(APPEND CMAKE_PREFIX_PATH "D:/sdk/browserpagewidget")
+list(APPEND CMAKE_PREFIX_PATH "<安装目录>/browserpagewidget")
 
 find_package(BrowserPageWidget REQUIRED)
 
@@ -352,7 +376,7 @@ browser.setDownloadPolicy(bm::BrowserPageWidget::DownloadPolicy::AutoSave);
 设置下载目录：
 
 ```cpp
-browser.setDownloadDirectory("D:/Downloads");
+browser.setDownloadDirectory("<下载目录>");
 ```
 
 监听下载状态：

@@ -1,11 +1,10 @@
-#include "browserpagepolicy.h"
+﻿#include "browserpagepolicy.h"
 
 #include <QCoreApplication>
 
 namespace bm {
 
 BrowserPagePolicy::BrowserPagePolicy()
-    // 默认允许现代前端常用协议；file 和未知协议需要调用方显式放开。
     : allowedUrlSchemes_({
           QStringLiteral("about"),
           QStringLiteral("blob"),
@@ -14,8 +13,7 @@ BrowserPagePolicy::BrowserPagePolicy()
           QStringLiteral("https"),
           QStringLiteral("qrc")
       })
-{
-}
+{}
 
 QSet<QString> BrowserPagePolicy::allowedUrlSchemes() const
 {

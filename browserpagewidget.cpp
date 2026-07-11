@@ -1,4 +1,4 @@
-#include "browserpagewidget.h"
+﻿#include "browserpagewidget.h"
 
 #include "browserdownloadmanager_p.h"
 #include "browserpagewidget_p.h"
@@ -19,16 +19,12 @@
 namespace bm {
 
 BrowserPageWidget::BrowserPageWidget(QWidget *parent)
-    // 默认构造时由控件自己创建 Profile，调用方不用管理它的释放。
     : BrowserPageWidget(new QWebEngineProfile(), true, parent)
-{
-}
+{}
 
 BrowserPageWidget::BrowserPageWidget(QWebEngineProfile &profile, QWidget *parent)
-    // 外部 Profile 适合多个控件共享 Cookie、缓存、WebChannel 或请求拦截器。
     : BrowserPageWidget(&profile, false, parent)
-{
-}
+{}
 
 BrowserPageWidget::BrowserPageWidget(QWebEngineProfile *profile,
                                      bool ownsProfile,

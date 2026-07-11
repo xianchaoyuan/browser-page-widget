@@ -3,7 +3,6 @@
 #include <QCoreApplication>
 #include <QEventLoop>
 #include <QFrame>
-#include <QGraphicsDropShadowEffect>
 #include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -42,7 +41,6 @@ AgentStartupSplash::AgentStartupSplash(const QUrl &pageUrl)
     , progressBar_(new QProgressBar(this))
 {
     setWindowFlags(Qt::SplashScreen | Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint);
-    setAttribute(Qt::WA_TranslucentBackground);
     setFixedSize(640, 340);
     setStyleSheet(QStringLiteral(R"(
         QWidget {
@@ -145,15 +143,10 @@ AgentStartupSplash::AgentStartupSplash(const QUrl &pageUrl)
     )"));
 
     auto *rootLayout = new QVBoxLayout(this);
-    rootLayout->setContentsMargins(18, 18, 18, 18);
+    rootLayout->setContentsMargins(0, 0, 0, 0);
 
     auto *shellFrame = new QFrame(this);
     shellFrame->setObjectName(QStringLiteral("ShellFrame"));
-    auto *shadowEffect = new QGraphicsDropShadowEffect(shellFrame);
-    shadowEffect->setBlurRadius(30);
-    shadowEffect->setOffset(0, 8);
-    shadowEffect->setColor(QColor(15, 23, 42, 48));
-    shellFrame->setGraphicsEffect(shadowEffect);
     rootLayout->addWidget(shellFrame);
 
     auto *shellLayout = new QHBoxLayout(shellFrame);

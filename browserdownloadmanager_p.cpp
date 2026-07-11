@@ -1,4 +1,4 @@
-﻿#include "browserdownloadmanager_p.h"
+#include "browserdownloadmanager_p.h"
 
 #include "browserpagewidget.h"
 #include "browserpagewidget_p.h"
@@ -135,7 +135,7 @@ QString BrowserDownloadManager::defaultDownloadDirectory()
     // 优先使用系统下载目录；极端情况下再退回到用户目录下的 Downloads。
     QString directory = QStandardPaths::writableLocation(QStandardPaths::DownloadLocation);
     if (directory.isEmpty()) {
-        directory = QDir::homePath() + QStringLiteral("/Downloads");
+        directory = QDir(QDir::homePath()).filePath(QStringLiteral("Downloads"));
     }
     return QDir::cleanPath(directory);
 }
@@ -278,3 +278,4 @@ QString BrowserDownloadManager::uniqueDownloadFileName(const QString &directory,
 }
 
 } // namespace bm
+

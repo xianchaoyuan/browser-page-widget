@@ -3,12 +3,15 @@
 
 #include <QApplication>
 #include <QCoreApplication>
+#include <QDateTime>
 #include <QDebug>
 #include <QDir>
 #include <QElapsedTimer>
 #include <QEventLoop>
+#include <QFile>
 #include <QFileInfo>
 #include <QProcess>
+#include <QStandardPaths>
 #include <QStringList>
 #include <QTcpSocket>
 #include <QUrl>
@@ -20,6 +23,7 @@ namespace {
 constexpr int kServiceStartupTimeoutMs = 120000;
 constexpr int kEndpointProbeTimeoutMs = 300;
 
+// 允许命令行传入页面地址；未传入时使用默认本地 agent 页面。
 QUrl agentPageUrl(const QStringList &arguments)
 {
     if (arguments.size() > 1) {
@@ -29,18 +33,46 @@ QUrl agentPageUrl(const QStringList &arguments)
     return QUrl(QStringLiteral("http://127.0.0.1:19001/"));
 }
 
-// AgentPageViewer 和库都会输出到 bin/<Config>，服务固定放在 bin/Release/openclaw-service。
+// 返回服务目录候选路径，优先满足发布包结构，再兼容开发目录结构。
+QStringList openClawServiceDirectoryCandidates()
+{
+    QStringList candidates;
+    QDir appDir(QCoreApplication::applicationDirPath());
+
+    // 发布包推荐结构：AgentPageViewer.exe 与 openclaw-service 在同一层目录。
+    candidates.append(QDir::cleanPath(appDir.filePath(QStringLiteral("openclaw-service"))));
+
+    // 兼容开发环境：bin/dist/openclaw-service。
+    candidates.append(QDir::cleanPath(appDir.filePath(QStringLiteral("../dist/openclaw-service"))));
+
+    return candidates;
+}
+
+// 从候选路径中选择真正包含 openclaw.cmd 的服务目录。
 QString openClawServiceDirectory()
 {
-    QDir binDir(QCoreApplication::applicationDirPath());
-    if (binDir.dirName().compare(QStringLiteral("Debug"), Qt::CaseInsensitive) == 0
-        || binDir.dirName().compare(QStringLiteral("Release"), Qt::CaseInsensitive) == 0
-        || binDir.dirName().compare(QStringLiteral("RelWithDebInfo"), Qt::CaseInsensitive) == 0
-        || binDir.dirName().compare(QStringLiteral("MinSizeRel"), Qt::CaseInsensitive) == 0) {
-        binDir.cdUp();
+    const QStringList candidates = openClawServiceDirectoryCandidates();
+    for (const QString &candidate : candidates) {
+        if (QFileInfo::exists(QDir(candidate).filePath(QStringLiteral("openclaw.cmd")))) {
+            return candidate;
+        }
     }
 
-    return binDir.filePath(QStringLiteral("Release/openclaw-service"));
+    return candidates.isEmpty()
+               ? QDir(QCoreApplication::applicationDirPath()).filePath(QStringLiteral("openclaw-service"))
+               : candidates.first();
+}
+
+// 启动画面里优先显示相对路径，避免暴露固定安装盘符。
+QString pathForDisplay(const QString &path)
+{
+    QDir appDir(QCoreApplication::applicationDirPath());
+    const QString relativePath = appDir.relativeFilePath(path);
+    if (!relativePath.isEmpty() && !QDir::isAbsolutePath(relativePath)) {
+        return QDir::toNativeSeparators(relativePath);
+    }
+
+    return QDir::toNativeSeparators(QFileInfo(path).absoluteFilePath());
 }
 
 int defaultPortForUrl(const QUrl &url)
@@ -56,7 +88,9 @@ QString elapsedSecondsText(qint64 elapsedMs)
     return QStringLiteral("已等待 %1 秒").arg(elapsedMs / 1000);
 }
 
-// 这里只探测 TCP 端口是否可连接，不下载页面内容。
+/**
+ * @brief 这里只探测 TCP 端口是否可连接，不下载页面内容
+ */
 bool waitForEndpoint(const QUrl &url,
                      int timeoutMs,
                      const std::function<void(qint64 elapsedMs)> &onProbe = {})
@@ -89,52 +123,177 @@ bool waitForEndpoint(const QUrl &url,
     return false;
 }
 
-// 用 QProcess 启动 openclaw.cmd gateway，让服务和窗口程序一起受控。
-bool startOpenClawGateway(QProcess *process)
+// openclaw-service/state 是服务自己的状态目录，也是日志的首选位置。
+QString openClawStateDirectory()
+{
+    return QDir(openClawServiceDirectory()).filePath(QStringLiteral("state"));
+}
+
+QString serviceLogFileName()
+{
+    return QStringLiteral("agentpageviewer-service.log");
+}
+
+// 尝试创建日志目录并验证是否真的可写。
+QString writableLogPathInDirectory(const QString &directory)
+{
+    if (directory.isEmpty() || !QDir().mkpath(directory)) {
+        return QString();
+    }
+
+    const QString logPath = QDir(directory).filePath(serviceLogFileName());
+    QFile file(logPath);
+    if (!file.open(QIODevice::Append | QIODevice::Text)) {
+        return QString();
+    }
+
+    file.close();
+    return logPath;
+}
+
+// 首选日志目录不可写时，依次尝试几个更容易写入的位置。
+QString fallbackServiceLogPath()
+{
+    QString logPath = writableLogPathInDirectory(QCoreApplication::applicationDirPath());
+    if (!logPath.isEmpty()) {
+        return logPath;
+    }
+
+    const QString appDataDir = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
+    if (!appDataDir.isEmpty()) {
+        logPath = writableLogPathInDirectory(QDir(appDataDir).filePath(QStringLiteral("logs")));
+        if (!logPath.isEmpty()) {
+            return logPath;
+        }
+    }
+
+    const QString tempDir = QStandardPaths::writableLocation(QStandardPaths::TempLocation);
+    if (!tempDir.isEmpty()) {
+        logPath = writableLogPathInDirectory(QDir(tempDir).filePath(QStringLiteral("AgentPageViewer")));
+        if (!logPath.isEmpty()) {
+            return logPath;
+        }
+    }
+
+    return QDir(QCoreApplication::applicationDirPath()).filePath(serviceLogFileName());
+}
+
+QString openClawServiceLogPath()
+{
+    const QString primaryPath = writableLogPathInDirectory(openClawStateDirectory());
+    if (!primaryPath.isEmpty()) {
+        return primaryPath;
+    }
+
+    return fallbackServiceLogPath();
+}
+
+// 向服务诊断日志追加一行中文信息。
+void appendServiceLog(const QString &message)
+{
+    const QString logPath = openClawServiceLogPath();
+    QFile file(logPath);
+    if (!file.open(QIODevice::Append | QIODevice::Text)) {
+        qWarning().noquote() << "无法打开 AgentPageViewer 服务日志：" << logPath;
+        return;
+    }
+
+    const QString line = QStringLiteral("[%1] %2\n")
+                             .arg(QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd HH:mm:ss.zzz")),
+                                  message);
+    file.write(line.toLocal8Bit());
+}
+
+// 程序启动时先记录基础环境，方便定位服务目录和启动脚本问题。
+void appendStartupDiagnostics(const QUrl &pageUrl)
 {
     const QString serviceDir = openClawServiceDirectory();
     const QString commandPath = QDir(serviceDir).filePath(QStringLiteral("openclaw.cmd"));
+
+    appendServiceLog(QStringLiteral("---------------- AgentPageViewer 启动 ----------------"));
+    appendServiceLog(QStringLiteral("程序目录：%1")
+                         .arg(QDir::toNativeSeparators(QCoreApplication::applicationDirPath())));
+    appendServiceLog(QStringLiteral("OpenClaw 服务目录：%1")
+                         .arg(QDir::toNativeSeparators(serviceDir)));
+    appendServiceLog(QStringLiteral("服务日志路径：%1")
+                         .arg(pathForDisplay(openClawServiceLogPath())));
+    appendServiceLog(QStringLiteral("目标页面：%1").arg(pageUrl.toString()));
+    appendServiceLog(QStringLiteral("服务目录候选列表："));
+    for (const QString &candidate : openClawServiceDirectoryCandidates()) {
+        appendServiceLog(QStringLiteral("  %1").arg(QDir::toNativeSeparators(candidate)));
+    }
+    appendServiceLog(QStringLiteral("openclaw.cmd 是否存在：%1")
+                         .arg(QFileInfo::exists(commandPath) ? QStringLiteral("是") : QStringLiteral("否")));
+}
+
+// 通过 cmd.exe 执行 openclaw.cmd gateway。
+bool startOpenClawGateway(QProcess *process, const QUrl &pageUrl)
+{
+    const QString serviceDir = openClawServiceDirectory();
+    const QString commandPath = QDir(serviceDir).filePath(QStringLiteral("openclaw.cmd"));
+
+    appendServiceLog(QStringLiteral("---------------- 请求启动 OpenClaw ----------------"));
+
     if (!QFileInfo::exists(commandPath)) {
-        qWarning().noquote() << "OpenClaw service command not found:" << commandPath;
+        appendServiceLog(QStringLiteral("未找到启动脚本：%1").arg(commandPath));
+        qWarning().noquote() << "未找到 OpenClaw 服务启动脚本：" << commandPath;
         return false;
     }
 
     process->setWorkingDirectory(serviceDir);
     process->setProgram(QStringLiteral("cmd.exe"));
-    process->setArguments({QStringLiteral("/c"), QStringLiteral("openclaw.cmd"), QStringLiteral("gateway")});
-    process->setProcessChannelMode(QProcess::MergedChannels);
-
-    QObject::connect(process, &QProcess::readyReadStandardOutput,
-                     [process]() {
-                         const QString output = QString::fromLocal8Bit(process->readAllStandardOutput()).trimmed();
-                         if (!output.isEmpty()) {
-                             qInfo().noquote() << output;
-                         }
-                     });
+    process->setArguments({QStringLiteral("/d"),
+                           QStringLiteral("/c"),
+                           QStringLiteral("openclaw.cmd"),
+                           QStringLiteral("gateway")});
 
     QObject::connect(process, &QProcess::errorOccurred,
                      [](QProcess::ProcessError error) {
-                         qWarning().noquote() << "OpenClaw service process error:" << static_cast<int>(error);
+                         appendServiceLog(QStringLiteral("OpenClaw 进程错误：%1").arg(static_cast<int>(error)));
+                         qWarning().noquote() << "OpenClaw 服务进程错误：" << static_cast<int>(error);
                      });
 
     QObject::connect(process,
                      QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
                      [](int exitCode, QProcess::ExitStatus exitStatus) {
-                         qWarning().noquote() << "OpenClaw service process finished:"
-                                              << "exitCode=" << exitCode
-                                              << "exitStatus=" << static_cast<int>(exitStatus);
+                         appendServiceLog(QStringLiteral("OpenClaw 进程结束，退出码=%1，退出状态=%2")
+                                              .arg(exitCode)
+                                              .arg(static_cast<int>(exitStatus)));
+                         qWarning().noquote() << "OpenClaw 服务进程结束："
+                                              << "退出码=" << exitCode
+                                              << "退出状态=" << static_cast<int>(exitStatus);
                      });
+
+    appendServiceLog(QStringLiteral("正在通过 cmd.exe 启动 OpenClaw"));
+    appendServiceLog(QStringLiteral("程序：%1").arg(process->program()));
+    appendServiceLog(QStringLiteral("参数：%1").arg(process->arguments().join(QLatin1Char(' '))));
+    appendServiceLog(QStringLiteral("工作目录：%1").arg(QDir::toNativeSeparators(serviceDir)));
 
     process->start();
     if (!process->waitForStarted(5000)) {
-        qWarning().noquote() << "Failed to start OpenClaw service:" << process->errorString();
+        appendServiceLog(QStringLiteral("启动失败：%1").arg(process->errorString()));
+        qWarning().noquote() << "启动 OpenClaw 服务失败：" << process->errorString();
         return false;
     }
 
-    qInfo().noquote() << "OpenClaw service started from:" << serviceDir;
+    // 进程如果立刻退出，通常说明启动环境或命令不对。
+    if (process->waitForFinished(1500)) {
+        appendServiceLog(QStringLiteral("OpenClaw 进程过早退出，退出码=%1，退出状态=%2")
+                             .arg(process->exitCode())
+                             .arg(static_cast<int>(process->exitStatus())));
+        if (waitForEndpoint(pageUrl, 500)) {
+            appendServiceLog(QStringLiteral("进程提前退出后，目标页面已经可以连接。"));
+            return true;
+        }
+        return false;
+    }
+
+    appendServiceLog(QStringLiteral("OpenClaw 进程已启动并保持运行。"));
+    qInfo().noquote() << "OpenClaw 服务已通过 cmd.exe 启动";
     return true;
 }
 
+// 程序退出时尝试停止由本程序拉起的服务进程。
 void stopOpenClawGateway(QProcess *process)
 {
     if (!process || process->state() == QProcess::NotRunning) {
@@ -161,22 +320,26 @@ int main(int argc, char *argv[])
     const QUrl pageUrl = agentPageUrl(QCoreApplication::arguments());
     QProcess openClawGateway;
 
+    appendStartupDiagnostics(pageUrl);
+
     AgentStartupSplash splash(pageUrl);
     splash.setStatus(QStringLiteral("正在检查 OpenClaw 服务..."),
                      QStringLiteral("检测目标页面端口是否已经可连接。"));
     splash.show();
     app.processEvents();
 
+    appendServiceLog(QStringLiteral("启动服务前检查目标页面端口。"));
     if (!waitForEndpoint(pageUrl,
                          500,
                          [&splash](qint64) {
                              splash.setBusyProgress();
                          })) {
+        appendServiceLog(QStringLiteral("目标页面暂不可连接，准备启动 OpenClaw 服务。"));
         splash.setStatus(QStringLiteral("正在启动 OpenClaw 服务..."),
                          QStringLiteral("执行 openclaw.cmd gateway。"));
         splash.setBusyProgress();
 
-        const bool serviceStarted = startOpenClawGateway(&openClawGateway);
+        const bool serviceStarted = startOpenClawGateway(&openClawGateway, pageUrl);
         if (serviceStarted) {
             splash.setStatus(QStringLiteral("正在等待 OpenClaw 服务就绪..."),
                              QStringLiteral("服务已启动，正在等待页面端口响应。"));
@@ -187,19 +350,20 @@ int main(int argc, char *argv[])
                                                                             elapsedSecondsText(elapsedMs));
                                                        });
             if (!endpointReady) {
-                qWarning().noquote() << "Agent endpoint is not ready yet:" << pageUrl;
+                qWarning().noquote() << "Agent 页面端口暂未就绪：" << pageUrl;
                 splash.setStatus(QStringLiteral("服务暂未就绪，正在尝试打开页面..."),
-                                 pageUrl.toString());
+                                 QStringLiteral("日志：%1").arg(pathForDisplay(openClawServiceLogPath())));
             } else {
                 splash.setStatus(QStringLiteral("服务已就绪，正在打开页面..."),
                                  pageUrl.toString());
             }
         } else {
             splash.setStatus(QStringLiteral("服务启动失败，正在尝试打开页面..."),
-                             pageUrl.toString());
+                             QStringLiteral("日志：%1").arg(pathForDisplay(openClawServiceLogPath())));
         }
     } else {
-        qInfo().noquote() << "Agent endpoint is already available:" << pageUrl;
+        appendServiceLog(QStringLiteral("目标页面已可连接，跳过 OpenClaw 服务启动。"));
+        qInfo().noquote() << "Agent 页面端口已可连接：" << pageUrl;
         splash.setStatus(QStringLiteral("服务已启动，正在打开页面..."),
                          pageUrl.toString());
     }
@@ -237,9 +401,9 @@ int main(int argc, char *argv[])
     QObject::connect(&browser, &bm::BrowserPageWidget::loadFailed,
                      [&splash](const QUrl &url, int domain, int code, const QString &message) {
                          splash.close();
-                         qWarning().noquote() << "Agent page load failed:" << url
-                                              << "domain=" << domain
-                                              << "code=" << code
+                         qWarning().noquote() << "Agent 页面加载失败：" << url
+                                              << "错误域=" << domain
+                                              << "错误码=" << code
                                               << message;
                      });
 
@@ -251,24 +415,24 @@ int main(int argc, char *argv[])
     QObject::connect(&browser, &bm::BrowserPageWidget::renderProcessTerminated,
                      [&splash](int status, int exitCode) {
                          splash.close();
-                         qWarning().noquote() << "Agent page render process terminated:"
-                                              << "status=" << status
-                                              << "exitCode=" << exitCode;
+                         qWarning().noquote() << "Agent 页面渲染进程异常终止："
+                                              << "状态=" << status
+                                              << "退出码=" << exitCode;
                      });
 
     QObject::connect(&browser, &bm::BrowserPageWidget::downloadStarted,
                      [](quint32 id, const QUrl &url, const QString &filePath) {
-                         qInfo().noquote() << "Download started:" << id << url << filePath;
+                         qInfo().noquote() << "下载开始：" << id << url << filePath;
                      });
 
     QObject::connect(&browser, &bm::BrowserPageWidget::downloadFinished,
                      [](quint32 id, const QString &filePath) {
-                         qInfo().noquote() << "Download finished:" << id << filePath;
+                         qInfo().noquote() << "下载完成：" << id << filePath;
                      });
 
     QObject::connect(&browser, &bm::BrowserPageWidget::downloadFailed,
                      [](quint32 id, const QString &reason) {
-                         qWarning().noquote() << "Download failed:" << id << reason;
+                         qWarning().noquote() << "下载失败：" << id << reason;
                      });
 
     browser.loadUrl(browser.homeUrl());
@@ -277,4 +441,3 @@ int main(int argc, char *argv[])
 
     return app.exec();
 }
-
