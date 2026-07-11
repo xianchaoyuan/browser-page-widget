@@ -39,10 +39,16 @@
 ```text
 browser-page-widget/
 ├── CMakeLists.txt
-├── main.cpp
-├── agentpage_main.cpp
-├── agentstartupsplash.h
-├── agentstartupsplash.cpp
+├── example/
+│   └── main.cpp
+├── agentpageviewer/
+│   ├── main.cpp
+│   ├── agentstartupcontroller.h
+│   ├── agentstartupcontroller.cpp
+│   ├── endpointwaiter.h
+│   ├── endpointwaiter.cpp
+│   ├── agentstartupsplash.h
+│   └── agentstartupsplash.cpp
 ├── browserpagewidget.h
 ├── browserpagewidget.cpp
 ├── browserpagewidget_p.h
@@ -68,9 +74,11 @@ browser-page-widget/
 | `browserwebpage_p.h/.cpp` | 内部 WebPage，用于接管导航、弹窗和 console 日志 |
 | `browserdownloadmanager_p.h/.cpp` | 下载策略、保存路径和下载进度处理 |
 | `browserpagewidgetglobal.h` | 动态库导入导出宏 |
-| `main.cpp` | Demo 程序入口 |
-| `agentpage_main.cpp` | AgentPageViewer 程序入口，负责启动 OpenClaw 服务并显示 agent 页面 |
-| `agentstartupsplash.h/.cpp` | AgentPageViewer 启动画面，显示服务启动和页面加载状态 |
+| `example/main.cpp` | Example 程序入口 |
+| `agentpageviewer/main.cpp` | AgentPageViewer 程序入口，负责创建启动画面和显示 agent 页面 |
+| `agentpageviewer/agentstartupcontroller.h/.cpp` | AgentPageViewer 启动流程控制器，负责异步检查服务、启动 OpenClaw、等待端口就绪 |
+| `agentpageviewer/endpointwaiter.h/.cpp` | 异步端口等待器，负责非阻塞探测 agent 页面端口是否可连接 |
+| `agentpageviewer/agentstartupsplash.h/.cpp` | AgentPageViewer 启动画面，显示服务启动和页面加载状态 |
 | `cmake/BrowserPageWidgetConfig.cmake.in` | 安装后供 `find_package()` 使用的 CMake 配置模板 |
 
 ## 快速编译
@@ -89,10 +97,10 @@ cmake -S . -B build -DBROWSER_PAGE_WIDGET_QT_ROOT=<Qt安装目录>
 cmake --build build --config Debug
 ```
 
-生成的 Demo 程序通常位于：
+生成的 Example 程序通常位于：
 
 ```text
-bin/Debug/BrowserPageWidgetDemo.exe
+bin/Debug/BrowserPageWidgetExample.exe
 ```
 
 如果使用的是 Visual Studio 多配置生成器，`Debug`、`Release` 会分别生成到对应配置目录。
@@ -101,23 +109,23 @@ bin/Debug/BrowserPageWidgetDemo.exe
 
 | 选项 | 默认值 | 说明 |
 | --- | --- | --- |
-| `BROWSER_PAGE_WIDGET_BUILD_DEMO` | `ON` | 是否编译 Demo 程序 |
+| `BROWSER_PAGE_WIDGET_BUILD_EXAMPLE` | `ON` | 是否编译 Example 程序 |
 | `BROWSER_PAGE_WIDGET_BUILD_AGENT_VIEWER` | `ON` | 是否编译 AgentPageViewer 程序 |
 | `BROWSER_PAGE_WIDGET_QT_ROOT` | 空 | 可选 Qt 6 安装目录提示 |
 
 当前项目固定生成动态库，不再通过 `BUILD_SHARED_LIBS` 切换静态库。
 
-示例：只编译库，不编译 Demo：
+示例：只编译库，不编译 Example：
 
 ```powershell
-cmake -S . -B build -DBROWSER_PAGE_WIDGET_BUILD_DEMO=OFF
+cmake -S . -B build -DBROWSER_PAGE_WIDGET_BUILD_EXAMPLE=OFF
 cmake --build build --config Release
 ```
 
 
 ## AgentPageViewer
 
-`AgentPageViewer` 是一个类似 Demo 的独立程序，用于直接显示 agent 页面。
+`AgentPageViewer` 是一个类似 Example 的独立程序，用于直接显示 agent 页面。
 
 程序显示页面前会先检查目标地址是否已经可连接。如果还没有服务，它会从程序目录附近查找并自动启动 OpenClaw 服务。
 
@@ -141,7 +149,7 @@ openclaw-service/openclaw.cmd gateway
 
 开发调试时也兼容 `bin/Debug/AgentPageViewer.exe` 或 `bin/Release/AgentPageViewer.exe` 自动查找 `bin/dist/openclaw-service`。
 
-启动过程中会显示启动画面，提示当前正在检查服务、启动服务或等待服务就绪。程序通过 `cmd.exe /d /c openclaw.cmd gateway` 启动服务，工作目录为 `openclaw-service`。启动后程序会等待最多 120 秒，等目标页面端口可连接后再加载网页。
+启动过程中会显示启动画面，提示当前正在检查服务、启动服务或等待服务就绪。程序通过 `cmd.exe /d /c openclaw.cmd gateway` 启动服务，工作目录为 `openclaw-service`。端口检查和服务等待使用异步流程，启动画面会保持响应；程序最多等待 120 秒，等目标页面端口可连接后再加载网页。
 
 程序启动时就会创建诊断日志，并记录应用目录、服务目录、目标 URL 和服务文件是否存在。默认日志路径为：
 
@@ -165,11 +173,11 @@ AgentPageViewer.exe http://127.0.0.1:18801/__quantclaw__/control/chat?session=ma
 
 程序默认隐藏顶部工具栏，保留底部状态栏，并启用自动下载保存。页面加载完成、加载失败或加载超时时，启动画面会自动关闭。
 
-## Demo 说明
+## Example 说明
 
-Demo 入口在 `main.cpp`。
+Example 入口在 `example/main.cpp`。
 
-当前 Demo 默认配置：
+当前 Example 默认配置：
 
 ```cpp
 browser.setHomeUrl(QStringLiteral("http://127.0.0.1:19001/"));
@@ -498,4 +506,7 @@ browserpagewidgetd.lib
 ## 许可证
 
 当前仓库未包含许可证文件。正式发布前建议补充 `LICENSE`。
+
+
+
 

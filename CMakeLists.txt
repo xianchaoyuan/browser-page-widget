@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.21)
 
 project(BrowserPageWidget VERSION 2.0.0 LANGUAGES CXX)
 
-option(BROWSER_PAGE_WIDGET_BUILD_DEMO "Build the BrowserPageWidget demo" ON)
+option(BROWSER_PAGE_WIDGET_BUILD_EXAMPLE "Build the BrowserPageWidget example" ON)
 option(BROWSER_PAGE_WIDGET_BUILD_AGENT_VIEWER "Build the AgentPageViewer program" ON)
 set(BROWSER_PAGE_WIDGET_QT_ROOT "" CACHE PATH "Optional Qt 6 installation root")
 
@@ -90,20 +90,24 @@ set_target_properties(browserpagewidget PROPERTIES
     OUTPUT_NAME browserpagewidget
 )
 
-if(BROWSER_PAGE_WIDGET_BUILD_DEMO)
-    add_executable(BrowserPageWidgetDemo WIN32 main.cpp)
-    target_link_libraries(BrowserPageWidgetDemo PRIVATE bm::browserpagewidget)
+if(BROWSER_PAGE_WIDGET_BUILD_EXAMPLE)
+    add_executable(BrowserPageWidgetExample WIN32 example/main.cpp)
+    target_link_libraries(BrowserPageWidgetExample PRIVATE bm::browserpagewidget)
 
     if(MSVC)
-        target_compile_options(BrowserPageWidgetDemo PRIVATE /utf-8 /W4 /permissive-)
+        target_compile_options(BrowserPageWidgetExample PRIVATE /utf-8 /W4 /permissive-)
     endif()
 endif()
 
 if(BROWSER_PAGE_WIDGET_BUILD_AGENT_VIEWER)
     add_executable(AgentPageViewer WIN32
-        agentpage_main.cpp
-        agentstartupsplash.h
-        agentstartupsplash.cpp
+        agentpageviewer/main.cpp
+        agentpageviewer/agentstartupcontroller.h
+        agentpageviewer/agentstartupcontroller.cpp
+        agentpageviewer/endpointwaiter.h
+        agentpageviewer/endpointwaiter.cpp
+        agentpageviewer/agentstartupsplash.h
+        agentpageviewer/agentstartupsplash.cpp
     )
     target_link_libraries(AgentPageViewer PRIVATE bm::browserpagewidget Qt6::Network)
 
@@ -154,4 +158,6 @@ message(STATUS "Qt version: ${Qt6Core_VERSION}")
 if(BROWSER_PAGE_WIDGET_QT_ROOT)
     message(STATUS "Qt root hint: ${BROWSER_PAGE_WIDGET_QT_ROOT}")
 endif()
+
+
 

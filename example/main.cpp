@@ -9,11 +9,11 @@ int main(int argc, char *argv[])
     QCoreApplication::setAttribute(Qt::AA_ShareOpenGLContexts);
 
     QApplication app(argc, argv);
-    QApplication::setApplicationName(QStringLiteral("BrowserPageWidgetDemo"));
+    QApplication::setApplicationName(QStringLiteral("BrowserPageWidgetExample"));
     QApplication::setOrganizationName(QStringLiteral("BM"));
 
     bm::BrowserPageWidget browser;
-    browser.setWindowTitle(QStringLiteral("BrowserPageWidget Qt6 Demo"));
+    browser.setWindowTitle(QStringLiteral("BrowserPageWidget Qt6 Example"));
     browser.setHomeUrl(QStringLiteral("http://127.0.0.1:19001/"));
     browser.setLoadTimeoutMs(30000);
     browser.setToolbarVisible(false);
@@ -54,3 +54,4 @@ int main(int argc, char *argv[])
 
     return app.exec();
 }
+

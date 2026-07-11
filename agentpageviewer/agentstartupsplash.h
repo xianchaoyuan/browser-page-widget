@@ -1,4 +1,5 @@
-#pragma once
+#ifndef AGENTSTARTUPSPLASH_H
+#define AGENTSTARTUPSPLASH_H
 
 #include <QString>
 #include <QWidget>
@@ -59,3 +60,4 @@ private:
     QProgressBar *progressBar_ = nullptr;
 };
 
+#endif // AGENTSTARTUPSPLASH_H
