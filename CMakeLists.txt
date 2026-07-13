@@ -17,7 +17,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 
-foreach(CONFIG_TYPE Debug Release RelWithDebInfo MinSizeRel)
+foreach(CONFIG_TYPE debug release relwithdebinfo minsizerel)
     string(TOUPPER "${CONFIG_TYPE}" CONFIG_TYPE_UPPER)
     set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_${CONFIG_TYPE_UPPER} ${PROJECT_SOURCE_DIR}/bin/${CONFIG_TYPE})
     set(CMAKE_LIBRARY_OUTPUT_DIRECTORY_${CONFIG_TYPE_UPPER} ${PROJECT_SOURCE_DIR}/bin/${CONFIG_TYPE})
@@ -158,6 +158,3 @@ message(STATUS "Qt version: ${Qt6Core_VERSION}")
 if(BROWSER_PAGE_WIDGET_QT_ROOT)
     message(STATUS "Qt root hint: ${BROWSER_PAGE_WIDGET_QT_ROOT}")
 endif()
-
-
-

@@ -44,7 +44,7 @@ browser-page-widget/
 ├── agentpageviewer/
 │   ├── main.cpp
 │   ├── agentstartupcontroller.h
-│   ├── agentstartupcontroller.cpp
+│   ├── agentstartupcontroller.cpp
 │   ├── endpointwaiter.h
 │   ├── endpointwaiter.cpp
 │   ├── agentstartupsplash.h
@@ -76,7 +76,7 @@ browser-page-widget/
 | `browserpagewidgetglobal.h` | 动态库导入导出宏 |
 | `example/main.cpp` | Example 程序入口 |
 | `agentpageviewer/main.cpp` | AgentPageViewer 程序入口，负责创建启动画面和显示 agent 页面 |
-| `agentpageviewer/agentstartupcontroller.h/.cpp` | AgentPageViewer 启动流程控制器，负责异步检查服务、启动 OpenClaw、等待端口就绪 |
+| `agentpageviewer/agentstartupcontroller.h/.cpp` | AgentPageViewer 启动流程控制器，负责异步检查服务、启动 OpenClaw、等待端口就绪 |
 | `agentpageviewer/endpointwaiter.h/.cpp` | 异步端口等待器，负责非阻塞探测 agent 页面端口是否可连接 |
 | `agentpageviewer/agentstartupsplash.h/.cpp` | AgentPageViewer 启动画面，显示服务启动和页面加载状态 |
 | `cmake/BrowserPageWidgetConfig.cmake.in` | 安装后供 `find_package()` 使用的 CMake 配置模板 |
@@ -100,10 +100,10 @@ cmake --build build --config Debug
 生成的 Example 程序通常位于：
 
 ```text
-bin/Debug/BrowserPageWidgetExample.exe
+bin/debug/BrowserPageWidgetExample.exe
 ```
 
-如果使用的是 Visual Studio 多配置生成器，`Debug`、`Release` 会分别生成到对应配置目录。
+如果使用的是 Visual Studio 多配置生成器，`Debug`、`Release` 会分别生成到小写的对应配置目录，例如 `debug`、`release`。
 
 ## CMake 选项
 
@@ -147,7 +147,7 @@ cmake --build build --config Release
 openclaw-service/openclaw.cmd gateway
 ```
 
-开发调试时也兼容 `bin/Debug/AgentPageViewer.exe` 或 `bin/Release/AgentPageViewer.exe` 自动查找 `bin/dist/openclaw-service`。
+开发调试时也兼容 `bin/debug/AgentPageViewer.exe` 或 `bin/release/AgentPageViewer.exe` 自动查找 `bin/dist/openclaw-service`。
 
 启动过程中会显示启动画面，提示当前正在检查服务、启动服务或等待服务就绪。程序通过 `cmd.exe /d /c openclaw.cmd gateway` 启动服务，工作目录为 `openclaw-service`。端口检查和服务等待使用异步流程，启动画面会保持响应；程序最多等待 120 秒，等目标页面端口可连接后再加载网页。
 
@@ -506,7 +506,3 @@ browserpagewidgetd.lib
 ## 许可证
 
 当前仓库未包含许可证文件。正式发布前建议补充 `LICENSE`。
-
-
-
-
