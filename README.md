@@ -77,9 +77,9 @@ browser-page-widget/
 | `browserdownloadmanager_p.h/.cpp` | 下载策略、保存路径和下载进度处理 |
 | `browserpagewidgetglobal.h` | 动态库导入导出宏 |
 | `example/main.cpp` | Example 程序入口 |
-| `agentpageviewer/main.cpp` | AgentPageViewer 程序入口，负责创建启动画面和显示 agent 页面 |
-| `agentpageviewer/agentstartupcontroller.h/.cpp` | AgentPageViewer 启动流程控制器，负责异步检查服务、启动 OpenClaw、等待端口就绪 |
-| `agentpageviewer/endpointwaiter.h/.cpp` | 异步端口等待器，负责非阻塞探测 agent 页面端口是否可连接 |
+| `agentpageviewer/main.cpp` | AgentPageViewer 程序入口，负责创建启动画面和显示 Agent 页面 |
+| `agentpageviewer/agentstartupcontroller.h/.cpp` | AgentPageViewer 启动流程控制器，负责异步检查服务、启动 Agent、等待端口就绪 |
+| `agentpageviewer/endpointwaiter.h/.cpp` | 异步端口等待器，负责非阻塞探测 Agent 页面端口是否可连接 |
 | `agentpageviewer/processjob.h/.cpp` | 服务进程树管理器，Windows 下使用 Job Object 确保退出时清理本程序拉起的 node 服务 |
 | `agentpageviewer/agentstartupsplash.h/.cpp` | AgentPageViewer 启动画面，显示服务启动和页面加载状态 |
 | `cmake/BrowserPageWidgetConfig.cmake.in` | 安装后供 `find_package()` 使用的 CMake 配置模板 |
@@ -128,9 +128,9 @@ cmake --build build --config Release
 
 ## AgentPageViewer
 
-`AgentPageViewer` 是一个类似 Example 的独立程序，用于直接显示 agent 页面。
+`AgentPageViewer` 是一个类似 Example 的独立程序，用于直接显示 Agent 页面。
 
-程序显示页面前会先检查目标地址是否已经可连接。如果还没有服务，它会从程序目录附近查找并自动启动 OpenClaw 服务。
+程序显示页面前会先检查目标地址是否已经可连接。如果还没有服务，它会从程序目录附近查找并自动启动 Agent 服务。
 
 推荐发布包结构：
 

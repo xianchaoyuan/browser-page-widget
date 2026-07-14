@@ -1,8 +1,10 @@
 #include "agentstartupsplash.h"
 
+#include <QColor>
 #include <QCoreApplication>
 #include <QEventLoop>
 #include <QFrame>
+#include <QGraphicsDropShadowEffect>
 #include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -41,37 +43,38 @@ AgentStartupSplash::AgentStartupSplash(const QUrl &pageUrl)
     , progressBar_(new QProgressBar(this))
 {
     setWindowFlags(Qt::SplashScreen | Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint);
-    setFixedSize(640, 340);
+    setAttribute(Qt::WA_TranslucentBackground, true);
+    setFixedSize(712, 392);
     setStyleSheet(QStringLiteral(R"(
         QWidget {
-            color: #1f2937;
+            color: #172033;
             font-family: "Microsoft YaHei", "Segoe UI";
             font-size: 13px;
         }
         QFrame#ShellFrame {
-            background: #ffffff;
-            border: 1px solid #dbe3ef;
-            border-radius: 14px;
+            background: #fbfdff;
+            border: 1px solid #cad7e8;
+            border-radius: 16px;
         }
         QFrame#BrandPanel {
-            background: #0f172a;
-            border-top-left-radius: 14px;
-            border-bottom-left-radius: 14px;
+            background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #0b1220, stop:0.58 #12314d, stop:1 #0f766e);
+            border-top-left-radius: 16px;
+            border-bottom-left-radius: 16px;
         }
         QLabel {
             border: none;
             background: transparent;
         }
         QLabel#IconLabel {
-            background: #2563eb;
-            border-radius: 14px;
+            background: #0ea5e9;
+            border-radius: 16px;
             color: #ffffff;
-            font-size: 25px;
+            font-size: 26px;
             font-weight: 700;
         }
         QLabel#BrandTitleLabel {
             color: #f8fafc;
-            font-size: 17px;
+            font-size: 18px;
             font-weight: 600;
         }
         QLabel#BrandSubtitleLabel {
@@ -79,8 +82,8 @@ AgentStartupSplash::AgentStartupSplash(const QUrl &pageUrl)
             font-size: 12px;
         }
         QLabel#TitleLabel {
-            color: #0f172a;
-            font-size: 22px;
+            color: #101828;
+            font-size: 23px;
             font-weight: 600;
         }
         QLabel#SubtitleLabel {
@@ -88,20 +91,20 @@ AgentStartupSplash::AgentStartupSplash(const QUrl &pageUrl)
             font-size: 13px;
         }
         QLabel#BadgeLabel {
-            background: #e0f2fe;
-            border: 1px solid #bae6fd;
+            background: #ecfdf5;
+            border: 1px solid #bbf7d0;
             border-radius: 11px;
-            color: #0369a1;
+            color: #047857;
             font-size: 12px;
             padding: 3px 10px;
         }
         QFrame#StatusCard {
             background: #f8fafc;
-            border: 1px solid #e2e8f0;
-            border-radius: 10px;
+            border: 1px solid #d7e3f4;
+            border-radius: 12px;
         }
         QLabel#StatusLabel {
-            color: #111827;
+            color: #101828;
             font-size: 16px;
             font-weight: 600;
         }
@@ -114,14 +117,14 @@ AgentStartupSplash::AgentStartupSplash(const QUrl &pageUrl)
             font-size: 12px;
         }
         QFrame#TargetFrame {
-            background: #f1f5f9;
-            border: 1px solid #e2e8f0;
+            background: #eef6ff;
+            border: 1px solid #d7e3f4;
             border-radius: 8px;
         }
         QLabel#TargetTagLabel {
-            background: #dbeafe;
+            background: #dcfce7;
             border-radius: 6px;
-            color: #1d4ed8;
+            color: #047857;
             font-size: 11px;
             font-weight: 600;
             padding: 2px 6px;
@@ -134,19 +137,26 @@ AgentStartupSplash::AgentStartupSplash(const QUrl &pageUrl)
             height: 9px;
             border: none;
             border-radius: 4px;
-            background: #e2e8f0;
+            background: #dbe7f3;
         }
         QProgressBar::chunk {
             border-radius: 4px;
-            background: #2563eb;
+            background: #0ea5e9;
         }
     )"));
 
     auto *rootLayout = new QVBoxLayout(this);
-    rootLayout->setContentsMargins(0, 0, 0, 0);
+    rootLayout->setContentsMargins(16, 16, 16, 16);
 
     auto *shellFrame = new QFrame(this);
     shellFrame->setObjectName(QStringLiteral("ShellFrame"));
+
+    auto *shadowEffect = new QGraphicsDropShadowEffect(shellFrame);
+    shadowEffect->setBlurRadius(30.0);
+    shadowEffect->setOffset(0.0, 6.0);
+    shadowEffect->setColor(QColor(15, 23, 42, 72));
+    shellFrame->setGraphicsEffect(shadowEffect);
+
     rootLayout->addWidget(shellFrame);
 
     auto *shellLayout = new QHBoxLayout(shellFrame);
@@ -155,18 +165,18 @@ AgentStartupSplash::AgentStartupSplash(const QUrl &pageUrl)
 
     auto *brandPanel = new QFrame(shellFrame);
     brandPanel->setObjectName(QStringLiteral("BrandPanel"));
-    brandPanel->setFixedWidth(180);
+    brandPanel->setFixedWidth(190);
 
     auto *brandLayout = new QVBoxLayout(brandPanel);
-    brandLayout->setContentsMargins(24, 28, 22, 26);
+    brandLayout->setContentsMargins(26, 30, 24, 28);
     brandLayout->setSpacing(12);
 
     auto *iconLabel = createLabel(QStringLiteral("IconLabel"), QStringLiteral("A"), brandPanel);
     iconLabel->setAlignment(Qt::AlignCenter);
-    iconLabel->setFixedSize(52, 52);
+    iconLabel->setFixedSize(54, 54);
 
     auto *brandTitleLabel = createLabel(QStringLiteral("BrandTitleLabel"), QStringLiteral("Agent Viewer"), brandPanel);
-    auto *brandSubtitleLabel = createLabel(QStringLiteral("BrandSubtitleLabel"), QStringLiteral("OpenClaw Gateway"), brandPanel);
+    auto *brandSubtitleLabel = createLabel(QStringLiteral("BrandSubtitleLabel"), QStringLiteral("Agent Service"), brandPanel);
     brandSubtitleLabel->setWordWrap(true);
 
     brandLayout->addWidget(iconLabel);
@@ -174,11 +184,11 @@ AgentStartupSplash::AgentStartupSplash(const QUrl &pageUrl)
     brandLayout->addWidget(brandTitleLabel);
     brandLayout->addWidget(brandSubtitleLabel);
     brandLayout->addStretch();
-    brandLayout->addWidget(createLabel(QStringLiteral("BrandSubtitleLabel"), QStringLiteral("正在建立本地服务连接"), brandPanel));
+    brandLayout->addWidget(createLabel(QStringLiteral("BrandSubtitleLabel"), QStringLiteral("本地 Agent 通道"), brandPanel));
 
     auto *contentWidget = new QWidget(shellFrame);
     auto *contentLayout = new QVBoxLayout(contentWidget);
-    contentLayout->setContentsMargins(30, 28, 30, 26);
+    contentLayout->setContentsMargins(32, 30, 32, 28);
     contentLayout->setSpacing(14);
 
     auto *headerLayout = new QHBoxLayout;
@@ -189,12 +199,12 @@ AgentStartupSplash::AgentStartupSplash(const QUrl &pageUrl)
     titleBlockLayout->setContentsMargins(0, 0, 0, 0);
     titleBlockLayout->setSpacing(4);
 
-    auto *titleLabel = createLabel(QStringLiteral("TitleLabel"), QStringLiteral("正在准备 agent 页面"), contentWidget);
-    auto *subtitleLabel = createLabel(QStringLiteral("SubtitleLabel"), QStringLiteral("请稍候，服务启动完成后会自动进入页面"), contentWidget);
+    auto *titleLabel = createLabel(QStringLiteral("TitleLabel"), QStringLiteral("正在准备 Agent 页面"), contentWidget);
+    auto *subtitleLabel = createLabel(QStringLiteral("SubtitleLabel"), QStringLiteral("Agent 服务就绪后会自动进入页面"), contentWidget);
     titleBlockLayout->addWidget(titleLabel);
     titleBlockLayout->addWidget(subtitleLabel);
 
-    auto *badgeLabel = createLabel(QStringLiteral("BadgeLabel"), QStringLiteral("启动中"), contentWidget);
+    auto *badgeLabel = createLabel(QStringLiteral("BadgeLabel"), QStringLiteral("Agent"), contentWidget);
     badgeLabel->setAlignment(Qt::AlignCenter);
     badgeLabel->setFixedHeight(24);
 
@@ -204,7 +214,7 @@ AgentStartupSplash::AgentStartupSplash(const QUrl &pageUrl)
     auto *statusCard = new QFrame(contentWidget);
     statusCard->setObjectName(QStringLiteral("StatusCard"));
     auto *statusLayout = new QVBoxLayout(statusCard);
-    statusLayout->setContentsMargins(18, 16, 18, 16);
+    statusLayout->setContentsMargins(20, 18, 20, 18);
     statusLayout->setSpacing(7);
 
     statusLabel_->setObjectName(QStringLiteral("StatusLabel"));
@@ -220,9 +230,9 @@ AgentStartupSplash::AgentStartupSplash(const QUrl &pageUrl)
     progressBar_->setRange(0, 0);
     progressBar_->setTextVisible(false);
     progressTextLabel_->setObjectName(QStringLiteral("ProgressTextLabel"));
-    progressTextLabel_->setText(QStringLiteral("准备中"));
+    progressTextLabel_->setText(QStringLiteral("连接中"));
     progressTextLabel_->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-    progressTextLabel_->setFixedWidth(68);
+    progressTextLabel_->setFixedWidth(72);
 
     progressRowLayout->addWidget(progressBar_, 1);
     progressRowLayout->addWidget(progressTextLabel_);
@@ -233,7 +243,7 @@ AgentStartupSplash::AgentStartupSplash(const QUrl &pageUrl)
     targetLayout->setContentsMargins(12, 9, 12, 9);
     targetLayout->setSpacing(10);
 
-    auto *targetTagLabel = createLabel(QStringLiteral("TargetTagLabel"), QStringLiteral("URL"), targetFrame);
+    auto *targetTagLabel = createLabel(QStringLiteral("TargetTagLabel"), QStringLiteral("目标"), targetFrame);
     targetTagLabel->setAlignment(Qt::AlignCenter);
 
     auto *targetUrlLabel = createLabel(QStringLiteral("TargetUrlLabel"), compactUrlText(pageUrl), targetFrame);
@@ -253,7 +263,7 @@ AgentStartupSplash::AgentStartupSplash(const QUrl &pageUrl)
     shellLayout->addWidget(contentWidget, 1);
 
     centerOnScreen();
-    setStatus(QStringLiteral("正在初始化..."));
+    setStatus(QStringLiteral("正在初始化 Agent..."));
 }
 
 void AgentStartupSplash::setStatus(const QString &status, const QString &detail)
@@ -269,7 +279,7 @@ void AgentStartupSplash::setStatus(const QString &status, const QString &detail)
 void AgentStartupSplash::setBusyProgress()
 {
     progressBar_->setRange(0, 0);
-    progressTextLabel_->setText(QStringLiteral("准备中"));
+    progressTextLabel_->setText(QStringLiteral("连接中"));
     QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
 }
 

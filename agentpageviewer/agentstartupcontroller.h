@@ -20,7 +20,7 @@ class AgentStartupController : public QObject
 public:
     /**
      * @brief 创建启动流程控制器。
-     * @param pageUrl 需要打开的 agent 页面地址。
+     * @param pageUrl 需要打开的 Agent 页面地址。
      * @param splash 启动画面，用于显示当前启动状态。
      * @param parent Qt 父对象。
      */
@@ -28,13 +28,13 @@ public:
                                     AgentStartupSplash *splash,
                                     QObject *parent = nullptr);
 
-    /** @brief 析构时会停止由本程序拉起的 OpenClaw 进程树。 */
+    /** @brief 析构时会停止由本程序拉起的 Agent 进程树。 */
     ~AgentStartupController() override;
 
     /** @brief 开始异步启动流程。 */
     void start();
 
-    /** @brief 停止由本程序拉起的 OpenClaw 进程树。 */
+    /** @brief 停止由本程序拉起的 Agent 进程树。 */
     void stopService();
 
 signals:
@@ -48,8 +48,8 @@ private:
     /** @brief 检查目标页面端口是否已经可连接。 */
     void checkEndpointBeforeStart();
 
-    /** @brief 启动 OpenClaw 服务。 */
-    bool startOpenClawGateway();
+    /** @brief 启动 Agent 服务。 */
+    bool startAgentGateway();
 
     /** @brief 服务启动命令发出后，异步等待目标端口就绪。 */
     void waitForServiceReady();
@@ -58,14 +58,14 @@ private:
     void finishStartup();
 
 private:
-    /** @brief 即将打开的 agent 页面地址。 */
+    /** @brief 即将打开的 Agent 页面地址。 */
     QUrl pageUrl_;
 
     /** @brief 启动画面，不由本类拥有。 */
     AgentStartupSplash *splash_ = nullptr;
 
-    /** @brief 本程序拉起的 OpenClaw 进程树管理器。 */
-    ProcessJob *openClawGateway_ = nullptr;
+    /** @brief 本程序拉起的 Agent 进程树管理器。 */
+    ProcessJob *agentGateway_ = nullptr;
 
     /** @brief 防止异步回调重复触发主界面打开。 */
     bool startupFinished_ = false;

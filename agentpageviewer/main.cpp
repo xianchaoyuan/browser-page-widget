@@ -12,7 +12,7 @@
 
 namespace {
 
-// 允许命令行传入页面地址；未传入时使用默认本地 agent 页面。
+// 允许命令行传入页面地址；未传入时使用默认本地 Agent 页面。
 QUrl agentPageUrl(const QStringList &arguments)
 {
     if (arguments.size() > 1) {
@@ -27,7 +27,7 @@ void connectBrowserSignals(bm::BrowserPageWidget *browser, AgentStartupSplash *s
 {
     QObject::connect(browser, &bm::BrowserPageWidget::loadStarted,
                      splash, [splash]() {
-                         splash->setStatus(QStringLiteral("正在加载 agent 页面..."));
+                         splash->setStatus(QStringLiteral("正在加载 Agent 页面..."));
                          splash->setProgress(0);
                      });
 
@@ -108,7 +108,7 @@ int main(int argc, char *argv[])
     const QUrl pageUrl = agentPageUrl(QCoreApplication::arguments());
 
     AgentStartupSplash splash(pageUrl);
-    splash.setStatus(QStringLiteral("正在检查 OpenClaw 服务..."),
+    splash.setStatus(QStringLiteral("正在检查 Agent 服务..."),
                      QStringLiteral("检测目标页面端口是否已经可连接。"));
     splash.show();
 
