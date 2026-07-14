@@ -83,10 +83,11 @@ void connectBrowserSignals(bm::BrowserPageWidget *browser, AgentStartupSplash *s
 std::unique_ptr<bm::BrowserPageWidget> createBrowser(const QUrl &pageUrl, AgentStartupSplash *splash)
 {
     auto browser = std::make_unique<bm::BrowserPageWidget>();
-    browser->setWindowTitle(QStringLiteral("RF Agent"));
+    browser->setWindowTitle(QStringLiteral("RF Claw"));
+    browser->setWindowIcon(QIcon(":/resources/logo.ico"));
     browser->setHomeUrl(pageUrl);
     browser->setLoadTimeoutMs(30000);
-    browser->setToolbarVisible(false);
+    // browser->setToolbarVisible(false);
     browser->setStatusBarVisible(true);
     browser->setPopupPolicy(bm::BrowserPageWidget::PopupPolicy::OpenInCurrentView);
     browser->setDownloadPolicy(bm::BrowserPageWidget::DownloadPolicy::AutoSave);

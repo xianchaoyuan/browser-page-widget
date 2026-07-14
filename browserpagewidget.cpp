@@ -497,7 +497,7 @@ void BrowserPageWidget::onLoadFinished(bool ok)
 void BrowserPageWidget::onTitleChanged(const QString &title)
 {
     if (isWindow()) {
-        setWindowTitle(title);
+        // setWindowTitle(title);
     }
     emit titleChanged(title);
 }

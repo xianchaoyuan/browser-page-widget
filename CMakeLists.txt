@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.21)
+﻿cmake_minimum_required(VERSION 3.21)
 
 project(BrowserPageWidget VERSION 2.0.0 LANGUAGES CXX)
 
@@ -101,6 +101,7 @@ endif()
 
 if(BROWSER_PAGE_WIDGET_BUILD_AGENT_VIEWER)
     add_executable(AgentPageViewer WIN32
+        agentpageviewer/resources.qrc
         agentpageviewer/main.cpp
         agentpageviewer/agentstartupcontroller.h
         agentpageviewer/agentstartupcontroller.cpp
