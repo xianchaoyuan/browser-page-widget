@@ -47,101 +47,103 @@ AgentStartupSplash::AgentStartupSplash(const QUrl &pageUrl)
     setFixedSize(712, 392);
     setStyleSheet(QStringLiteral(R"(
         QWidget {
-            color: #172033;
+            color: #111827;
             font-family: "Microsoft YaHei", "Segoe UI";
             font-size: 13px;
         }
         QFrame#ShellFrame {
-            background: #fbfdff;
-            border: 1px solid #cad7e8;
+            background: #ffffff;
+            border: 1px solid #e5e7eb;
             border-radius: 16px;
         }
         QFrame#BrandPanel {
-            background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #0b1220, stop:0.58 #12314d, stop:1 #0f766e);
+            background: #f9fafb;
             border-top-left-radius: 16px;
             border-bottom-left-radius: 16px;
+            border-right: 1px solid #e5e7eb;
         }
         QLabel {
             border: none;
             background: transparent;
         }
         QLabel#IconLabel {
-            background: #0ea5e9;
+            background: #eff6ff;
+            border: 1px solid #bfdbfe;
             border-radius: 16px;
-            color: #ffffff;
+            color: #2563eb;
             font-size: 26px;
             font-weight: 700;
         }
         QLabel#BrandTitleLabel {
-            color: #f8fafc;
+            color: #111827;
             font-size: 18px;
             font-weight: 600;
         }
         QLabel#BrandSubtitleLabel {
-            color: #cbd5e1;
+            color: #64748b;
             font-size: 12px;
         }
         QLabel#TitleLabel {
-            color: #101828;
+            color: #111827;
             font-size: 23px;
             font-weight: 600;
         }
         QLabel#SubtitleLabel {
-            color: #64748b;
+            color: #6b7280;
             font-size: 13px;
         }
         QLabel#BadgeLabel {
-            background: #ecfdf5;
-            border: 1px solid #bbf7d0;
+            background: #eff6ff;
+            border: 1px solid #bfdbfe;
             border-radius: 11px;
-            color: #047857;
+            color: #1d4ed8;
             font-size: 12px;
             padding: 3px 10px;
         }
         QFrame#StatusCard {
-            background: #f8fafc;
-            border: 1px solid #d7e3f4;
+            background: #ffffff;
+            border: 1px solid #e5e7eb;
             border-radius: 12px;
         }
         QLabel#StatusLabel {
-            color: #101828;
+            color: #111827;
             font-size: 16px;
             font-weight: 600;
         }
         QLabel#DetailLabel {
-            color: #64748b;
+            color: #6b7280;
             font-size: 12px;
         }
         QLabel#ProgressTextLabel {
-            color: #475569;
+            color: #4b5563;
             font-size: 12px;
         }
         QFrame#TargetFrame {
-            background: #eef6ff;
-            border: 1px solid #d7e3f4;
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
             border-radius: 8px;
         }
         QLabel#TargetTagLabel {
-            background: #dcfce7;
+            background: #eff6ff;
             border-radius: 6px;
-            color: #047857;
+            color: #1d4ed8;
             font-size: 11px;
             font-weight: 600;
             padding: 2px 6px;
         }
         QLabel#TargetUrlLabel {
-            color: #475569;
+            color: #4b5563;
             font-size: 12px;
         }
         QProgressBar {
             height: 9px;
             border: none;
             border-radius: 4px;
-            background: #dbe7f3;
+            background: #e5e7eb;
         }
         QProgressBar::chunk {
             border-radius: 4px;
-            background: #0ea5e9;
+            background: #2563eb;
         }
     )"));
 
@@ -152,9 +154,9 @@ AgentStartupSplash::AgentStartupSplash(const QUrl &pageUrl)
     shellFrame->setObjectName(QStringLiteral("ShellFrame"));
 
     auto *shadowEffect = new QGraphicsDropShadowEffect(shellFrame);
-    shadowEffect->setBlurRadius(30.0);
-    shadowEffect->setOffset(0.0, 6.0);
-    shadowEffect->setColor(QColor(15, 23, 42, 72));
+    shadowEffect->setBlurRadius(34.0);
+    shadowEffect->setOffset(0.0, 8.0);
+    shadowEffect->setColor(QColor(15, 23, 42, 46));
     shellFrame->setGraphicsEffect(shadowEffect);
 
     rootLayout->addWidget(shellFrame);
