@@ -106,6 +106,8 @@ if(BROWSER_PAGE_WIDGET_BUILD_AGENT_VIEWER)
         agentpageviewer/agentstartupcontroller.cpp
         agentpageviewer/endpointwaiter.h
         agentpageviewer/endpointwaiter.cpp
+        agentpageviewer/processjob.h
+        agentpageviewer/processjob.cpp
         agentpageviewer/agentstartupsplash.h
         agentpageviewer/agentstartupsplash.cpp
     )

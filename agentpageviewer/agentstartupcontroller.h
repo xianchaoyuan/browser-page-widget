@@ -5,7 +5,7 @@
 #include <QUrl>
 
 class AgentStartupSplash;
-class QProcess;
+class ProcessJob;
 
 /**
  * @brief 管理 AgentPageViewer 启动阶段的服务检查、服务启动和端口等待。
@@ -28,13 +28,13 @@ public:
                                     AgentStartupSplash *splash,
                                     QObject *parent = nullptr);
 
-    /** @brief 析构时会尝试停止由本程序拉起的 OpenClaw 启动进程。 */
+    /** @brief 析构时会停止由本程序拉起的 OpenClaw 进程树。 */
     ~AgentStartupController() override;
 
     /** @brief 开始异步启动流程。 */
     void start();
 
-    /** @brief 只发送停止请求，不同步等待进程结束。 */
+    /** @brief 停止由本程序拉起的 OpenClaw 进程树。 */
     void stopService();
 
 signals:
@@ -64,8 +64,8 @@ private:
     /** @brief 启动画面，不由本类拥有。 */
     AgentStartupSplash *splash_ = nullptr;
 
-    /** @brief 本程序拉起的 OpenClaw 启动进程。 */
-    QProcess *openClawGateway_ = nullptr;
+    /** @brief 本程序拉起的 OpenClaw 进程树管理器。 */
+    ProcessJob *openClawGateway_ = nullptr;
 
     /** @brief 防止异步回调重复触发主界面打开。 */
     bool startupFinished_ = false;

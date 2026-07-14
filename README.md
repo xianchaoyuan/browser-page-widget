@@ -47,6 +47,8 @@ browser-page-widget/
 │   ├── agentstartupcontroller.cpp
 │   ├── endpointwaiter.h
 │   ├── endpointwaiter.cpp
+│   ├── processjob.h
+│   ├── processjob.cpp
 │   ├── agentstartupsplash.h
 │   └── agentstartupsplash.cpp
 ├── browserpagewidget.h
@@ -78,6 +80,7 @@ browser-page-widget/
 | `agentpageviewer/main.cpp` | AgentPageViewer 程序入口，负责创建启动画面和显示 agent 页面 |
 | `agentpageviewer/agentstartupcontroller.h/.cpp` | AgentPageViewer 启动流程控制器，负责异步检查服务、启动 OpenClaw、等待端口就绪 |
 | `agentpageviewer/endpointwaiter.h/.cpp` | 异步端口等待器，负责非阻塞探测 agent 页面端口是否可连接 |
+| `agentpageviewer/processjob.h/.cpp` | 服务进程树管理器，Windows 下使用 Job Object 确保退出时清理本程序拉起的 node 服务 |
 | `agentpageviewer/agentstartupsplash.h/.cpp` | AgentPageViewer 启动画面，显示服务启动和页面加载状态 |
 | `cmake/BrowserPageWidgetConfig.cmake.in` | 安装后供 `find_package()` 使用的 CMake 配置模板 |
 
@@ -149,7 +152,7 @@ openclaw-service/openclaw.cmd gateway
 
 开发调试时也兼容 `bin/debug/AgentPageViewer.exe` 或 `bin/release/AgentPageViewer.exe` 自动查找 `bin/dist/openclaw-service`。
 
-启动过程中会显示启动画面，提示当前正在检查服务、启动服务或等待服务就绪。程序通过 `cmd.exe /d /c openclaw.cmd gateway` 启动服务，工作目录为 `openclaw-service`。端口检查和服务等待使用异步流程，启动画面会保持响应；程序最多等待 120 秒，等目标页面端口可连接后再加载网页。
+启动过程中会显示启动画面，提示当前正在检查服务、启动服务或等待服务就绪。程序通过 `cmd.exe /d /c openclaw.cmd gateway` 启动服务，工作目录为 `openclaw-service`。端口检查和服务等待使用异步流程，启动画面会保持响应；程序最多等待 120 秒，等目标页面端口可连接后再加载网页。Windows 下会使用 Job Object 管理由本程序拉起的服务进程树，AgentPageViewer 退出时会自动清理对应的 node 服务。
 
 程序启动时就会创建诊断日志，并记录应用目录、服务目录、目标 URL 和服务文件是否存在。默认日志路径为：
 

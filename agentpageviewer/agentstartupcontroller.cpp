@@ -2,6 +2,7 @@
 
 #include "agentstartupsplash.h"
 #include "endpointwaiter.h"
+#include "processjob.h"
 
 #include <QCoreApplication>
 #include <QDateTime>
@@ -9,9 +10,9 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
-#include <QProcess>
 #include <QStandardPaths>
 #include <QStringList>
+#include <QtGlobal>
 
 #include <functional>
 
@@ -64,6 +65,19 @@ QString pathForDisplay(const QString &path)
 QString elapsedSecondsText(qint64 elapsedMs)
 {
     return QStringLiteral("已等待 %1 秒").arg(elapsedMs / 1000);
+}
+
+QString commandInterpreterPath()
+{
+    const QString systemRoot = qEnvironmentVariable("SystemRoot");
+    if (!systemRoot.isEmpty()) {
+        const QString cmdPath = QDir(systemRoot).filePath(QStringLiteral("System32/cmd.exe"));
+        if (QFileInfo::exists(cmdPath)) {
+            return QDir::toNativeSeparators(cmdPath);
+        }
+    }
+
+    return QStringLiteral("cmd.exe");
 }
 
 // 创建端口等待器，并保持调用处只关心“等待进度”和“等待结果”。
@@ -174,31 +188,12 @@ AgentStartupController::AgentStartupController(const QUrl &pageUrl,
     : QObject(parent)
     , pageUrl_(pageUrl)
     , splash_(splash)
-    , openClawGateway_(new QProcess(this))
+    , openClawGateway_(new ProcessJob(this))
 {
-    QObject::connect(openClawGateway_, &QProcess::started,
-                     this, []() {
-                         appendServiceLog(QStringLiteral("OpenClaw 启动进程已创建。"));
-                         qInfo().noquote() << "OpenClaw 启动进程已创建";
-                     });
-
-    QObject::connect(openClawGateway_, &QProcess::errorOccurred,
-                     this, [](QProcess::ProcessError error) {
-                         appendServiceLog(QStringLiteral("OpenClaw 进程错误：%1").arg(static_cast<int>(error)));
-                         qWarning().noquote() << "OpenClaw 服务进程错误：" << static_cast<int>(error);
-                     });
-
-    QObject::connect(openClawGateway_,
-                     QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
-                     this,
-                     [](int exitCode, QProcess::ExitStatus exitStatus) {
-                         appendServiceLog(QStringLiteral("OpenClaw 进程结束，退出码=%1，退出状态=%2")
-                                              .arg(exitCode)
-                                              .arg(static_cast<int>(exitStatus)));
-                         qWarning().noquote() << "OpenClaw 服务进程结束："
-                                              << "退出码=" << exitCode
-                                              << "退出状态=" << static_cast<int>(exitStatus);
-                     });
+    openClawGateway_->setFinishedCallback([](int exitCode) {
+        appendServiceLog(QStringLiteral("OpenClaw 启动壳进程结束，退出码=%1。").arg(exitCode));
+        qWarning().noquote() << "OpenClaw 启动壳进程结束：退出码=" << exitCode;
+    });
 }
 
 AgentStartupController::~AgentStartupController()
@@ -214,11 +209,12 @@ void AgentStartupController::start()
 
 void AgentStartupController::stopService()
 {
-    if (!openClawGateway_ || openClawGateway_->state() == QProcess::NotRunning) {
+    if (!openClawGateway_ || !openClawGateway_->isActive()) {
         return;
     }
 
-    openClawGateway_->terminate();
+    appendServiceLog(QStringLiteral("正在关闭本程序启动的 OpenClaw 进程树。"));
+    openClawGateway_->close();
 }
 
 void AgentStartupController::appendStartupDiagnostics()
@@ -302,19 +298,26 @@ bool AgentStartupController::startOpenClawGateway()
         return false;
     }
 
-    openClawGateway_->setWorkingDirectory(serviceDir);
-    openClawGateway_->setProgram(QStringLiteral("cmd.exe"));
-    openClawGateway_->setArguments({QStringLiteral("/d"),
-                                    QStringLiteral("/c"),
-                                    QStringLiteral("openclaw.cmd"),
-                                    QStringLiteral("gateway")});
+    const QString program = commandInterpreterPath();
+    const QStringList arguments{QStringLiteral("/d"),
+                                QStringLiteral("/c"),
+                                QStringLiteral("openclaw.cmd"),
+                                QStringLiteral("gateway")};
 
     appendServiceLog(QStringLiteral("正在通过 cmd.exe 启动 OpenClaw"));
-    appendServiceLog(QStringLiteral("程序：%1").arg(openClawGateway_->program()));
-    appendServiceLog(QStringLiteral("参数：%1").arg(openClawGateway_->arguments().join(QLatin1Char(' '))));
+    appendServiceLog(QStringLiteral("程序：%1").arg(program));
+    appendServiceLog(QStringLiteral("参数：%1").arg(arguments.join(QLatin1Char(' '))));
     appendServiceLog(QStringLiteral("工作目录：%1").arg(QDir::toNativeSeparators(serviceDir)));
 
-    openClawGateway_->start();
+    if (!openClawGateway_->start(program, arguments, serviceDir)) {
+        appendServiceLog(QStringLiteral("OpenClaw 启动失败：%1").arg(openClawGateway_->lastErrorString()));
+        qWarning().noquote() << "OpenClaw 服务启动失败：" << openClawGateway_->lastErrorString();
+        return false;
+    }
+
+    appendServiceLog(QStringLiteral("OpenClaw 启动进程已创建，PID=%1，并已纳入进程作业。")
+                         .arg(openClawGateway_->processId()));
+    qInfo().noquote() << "OpenClaw 启动进程已创建，PID=" << openClawGateway_->processId();
     return true;
 }
 
