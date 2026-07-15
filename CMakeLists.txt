@@ -100,7 +100,14 @@ if(BROWSER_PAGE_WIDGET_BUILD_EXAMPLE)
 endif()
 
 if(BROWSER_PAGE_WIDGET_BUILD_AGENT_VIEWER)
+    set(AGENT_PAGE_VIEWER_WINDOWS_RESOURCES)
+    if(WIN32)
+        enable_language(RC)
+        list(APPEND AGENT_PAGE_VIEWER_WINDOWS_RESOURCES agentpageviewer/agentpageviewer.rc)
+    endif()
+
     add_executable(AgentPageViewer WIN32
+        ${AGENT_PAGE_VIEWER_WINDOWS_RESOURCES}
         agentpageviewer/resources.qrc
         agentpageviewer/main.cpp
         agentpageviewer/agentstartupcontroller.h
