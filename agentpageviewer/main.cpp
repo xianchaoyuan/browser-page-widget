@@ -1,4 +1,4 @@
-#include "browserpagewidget.h"
+﻿#include "browserpagewidget.h"
 #include "agentstartupcontroller.h"
 #include "agentstartupsplash.h"
 
@@ -87,7 +87,7 @@ std::unique_ptr<bm::BrowserPageWidget> createBrowser(const QUrl &pageUrl, AgentS
     browser->setWindowIcon(QIcon(":/resources/logo.ico"));
     browser->setHomeUrl(pageUrl);
     browser->setLoadTimeoutMs(30000);
-    // browser->setToolbarVisible(false);
+    browser->setToolbarVisible(false);
     browser->setStatusBarVisible(true);
     browser->setPopupPolicy(bm::BrowserPageWidget::PopupPolicy::OpenInCurrentView);
     browser->setDownloadPolicy(bm::BrowserPageWidget::DownloadPolicy::AutoSave);
