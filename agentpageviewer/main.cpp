@@ -27,7 +27,7 @@ void connectBrowserSignals(bm::BrowserPageWidget *browser, AgentStartupSplash *s
 {
     QObject::connect(browser, &bm::BrowserPageWidget::loadStarted,
                      splash, [splash]() {
-                         splash->setStatus(QStringLiteral("正在加载 Agent 页面..."));
+                         splash->setStatus(QStringLiteral("加载页面..."), QStringLiteral(""));
                          splash->setProgress(0);
                      });
 
@@ -103,18 +103,23 @@ int main(int argc, char *argv[])
     QCoreApplication::setAttribute(Qt::AA_ShareOpenGLContexts);
 
     QApplication app(argc, argv);
-    QApplication::setApplicationName(QStringLiteral("AgentPageViewer"));
+    QApplication::setApplicationName(QStringLiteral("RFClaw"));
     QApplication::setOrganizationName(QStringLiteral("BM"));
 
     const QUrl pageUrl = agentPageUrl(QCoreApplication::arguments());
 
     AgentStartupSplash splash(pageUrl);
-    splash.setStatus(QStringLiteral("正在检查 Agent 服务..."),
-                     QStringLiteral("检测目标页面端口是否已经可连接。"));
+    splash.setStatus(QStringLiteral("检查服务..."), QStringLiteral(""));
     splash.show();
 
     AgentStartupController startupController(pageUrl, &splash, &app);
     std::unique_ptr<bm::BrowserPageWidget> browser;
+
+    QObject::connect(&splash, &AgentStartupSplash::cancelRequested,
+                     &app, [&]() {
+                         startupController.stopService();
+                         app.quit();
+                     });
 
     QObject::connect(&startupController, &AgentStartupController::readyToOpenPage,
                      &app, [&]() {

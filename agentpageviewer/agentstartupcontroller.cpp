@@ -241,8 +241,7 @@ void AgentStartupController::appendStartupDiagnostics()
 void AgentStartupController::checkEndpointBeforeStart()
 {
     if (splash_) {
-        splash_->setStatus(QStringLiteral("正在检查 Agent 服务..."),
-                           QStringLiteral("检测目标页面端口是否已经可连接。"));
+        splash_->setStatus(QStringLiteral("检查服务..."), QStringLiteral(""));
     }
 
     appendServiceLog(QStringLiteral("启动服务前检查目标页面端口。"));
@@ -259,8 +258,7 @@ void AgentStartupController::checkEndpointBeforeStart()
                                  appendServiceLog(QStringLiteral("目标页面已可连接，跳过 Agent 服务启动。"));
                                  qInfo().noquote() << "Agent 页面端口已可连接：" << pageUrl_;
                                  if (splash_) {
-                                     splash_->setStatus(QStringLiteral("服务已启动，正在打开页面..."),
-                                                        pageUrl_.toString());
+                                     splash_->setStatus(QStringLiteral("打开页面..."), QStringLiteral(""));
                                  }
                                  finishStartup();
                                  return;
@@ -268,8 +266,7 @@ void AgentStartupController::checkEndpointBeforeStart()
 
                              appendServiceLog(QStringLiteral("目标页面暂不可连接，准备启动 Agent 服务。"));
                              if (splash_) {
-                                 splash_->setStatus(QStringLiteral("正在启动 Agent 服务..."),
-                                                    QStringLiteral("执行 cmd.exe /d /c openclaw.cmd gateway。"));
+                                 splash_->setStatus(QStringLiteral("启动服务..."), QStringLiteral(""));
                                  splash_->setBusyProgress();
                              }
 
@@ -277,7 +274,7 @@ void AgentStartupController::checkEndpointBeforeStart()
                                  waitForServiceReady();
                              } else {
                                  if (splash_) {
-                                     splash_->setStatus(QStringLiteral("服务启动失败，正在尝试打开页面..."),
+                                     splash_->setStatus(QStringLiteral("启动失败，尝试打开页面..."),
                                                         QStringLiteral("日志：%1").arg(pathForDisplay(openClawServiceLogPath())));
                                  }
                                  finishStartup();
@@ -324,8 +321,7 @@ bool AgentStartupController::startAgentGateway()
 void AgentStartupController::waitForServiceReady()
 {
     if (splash_) {
-        splash_->setStatus(QStringLiteral("正在等待 Agent 服务就绪..."),
-                           QStringLiteral("服务启动命令已发送，正在等待页面端口响应。"));
+        splash_->setStatus(QStringLiteral("等待服务..."), QStringLiteral(""));
     }
 
     waitForEndpointAsync(pageUrl_,
@@ -333,7 +329,7 @@ void AgentStartupController::waitForServiceReady()
                          this,
                          [this](qint64 elapsedMs) {
                              if (splash_) {
-                                 splash_->setStatus(QStringLiteral("正在等待 Agent 服务就绪..."),
+                                 splash_->setStatus(QStringLiteral("等待服务..."),
                                                     elapsedSecondsText(elapsedMs));
                              }
                          },
@@ -342,14 +338,13 @@ void AgentStartupController::waitForServiceReady()
                                  appendServiceLog(QStringLiteral("等待 Agent 服务就绪超时，继续尝试打开页面。"));
                                  qWarning().noquote() << "Agent 页面端口暂未就绪：" << pageUrl_;
                                  if (splash_) {
-                                     splash_->setStatus(QStringLiteral("服务暂未就绪，正在尝试打开页面..."),
+                                     splash_->setStatus(QStringLiteral("服务未就绪，尝试打开页面..."),
                                                         QStringLiteral("日志：%1").arg(pathForDisplay(openClawServiceLogPath())));
                                  }
                              } else {
                                  appendServiceLog(QStringLiteral("Agent 服务端口已就绪。"));
                                  if (splash_) {
-                                     splash_->setStatus(QStringLiteral("服务已就绪，正在打开页面..."),
-                                                        pageUrl_.toString());
+                                     splash_->setStatus(QStringLiteral("打开页面..."), QStringLiteral(""));
                                  }
                              }
 

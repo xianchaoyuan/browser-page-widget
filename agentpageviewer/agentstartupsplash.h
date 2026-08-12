@@ -6,6 +6,7 @@
 
 class QLabel;
 class QProgressBar;
+class QPushButton;
 class QUrl;
 
 /**
@@ -15,6 +16,8 @@ class QUrl;
  */
 class AgentStartupSplash : public QWidget
 {
+    Q_OBJECT
+
 public:
     /**
      * @brief 创建启动等待画面。
@@ -42,6 +45,10 @@ public:
      */
     void setProgress(int value);
 
+signals:
+    /** @brief 用户请求取消启动流程并退出程序。 */
+    void cancelRequested();
+
 private:
     /** @brief 将启动画面移动到主屏幕中心。 */
     void centerOnScreen();
@@ -58,6 +65,9 @@ private:
 
     /** @brief 显示忙碌状态或页面加载进度。 */
     QProgressBar *progressBar_ = nullptr;
+
+    /** @brief 取消启动流程的按钮。 */
+    QPushButton *cancelButton_ = nullptr;
 };
 
 #endif // AGENTSTARTUPSPLASH_H
