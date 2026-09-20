@@ -1,9 +1,9 @@
 #ifndef BROWSERDOWNLOADMANAGER_P_H
 #define BROWSERDOWNLOADMANAGER_P_H
 
-#include <QString>
+#include "browserqtcompat.h"
 
-class QWebEngineDownloadRequest;
+#include <QString>
 
 namespace bm {
 
@@ -30,7 +30,7 @@ public:
     /**
      * @brief 根据控件下载策略处理 WebEngine 下载请求。
      */
-    void handleDownloadRequested(QWebEngineDownloadRequest *download);
+    void handleDownloadRequested(bm::BrowserDownloadItem *download);
 
 private:
     /**

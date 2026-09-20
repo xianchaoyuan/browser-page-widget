@@ -409,31 +409,34 @@ void BrowserPageWidget::resetZoom()
     setZoomFactor(1.0);
 }
 
+void BrowserPageWidget::toggleDevTools()
+{
+    Q_D(BrowserPageWidget);
+    d->toggleDevTools();
+}
+
+void BrowserPageWidget::inspectElement()
+{
+    Q_D(BrowserPageWidget);
+    d->inspectElement();
+}
+
 void BrowserPageWidget::clearBrowsingData()
 {
     Q_D(BrowserPageWidget);
-    if (!d->profile_) {
-        return;
-    }
+    d->clearBrowsingData();
+}
 
-    // localStorage/sessionStorage 属于当前页面，只能通过页面脚本清理。
-    if (page()) {
-        page()->runJavaScript(QStringLiteral(
-            "try { localStorage.clear(); sessionStorage.clear(); } catch (e) {}"));
-    }
-    // history、cookie、http cache 分别属于不同对象，需要分开清理。
-    if (d->view_ && d->view_->history()) {
-        d->view_->history()->clear();
-    }
-    if (d->profile_->cookieStore()) {
-        d->profile_->cookieStore()->deleteAllCookies();
-    }
+void BrowserPageWidget::grantPermission(const QUrl &origin, int feature)
+{
+    Q_D(BrowserPageWidget);
+    d->grantPermission(origin, feature);
+}
 
-    // HTTP 缓存清理是异步的，完成后再通知宿主。
-    connect(d->profile_, &QWebEngineProfile::clearHttpCacheCompleted,
-            this, &BrowserPageWidget::browsingDataCleared,
-            Qt::SingleShotConnection);
-    d->profile_->clearHttpCache();
+void BrowserPageWidget::denyPermission(const QUrl &origin, int feature)
+{
+    Q_D(BrowserPageWidget);
+    d->denyPermission(origin, feature);
 }
 
 void BrowserPageWidget::commitAddressBar()
@@ -490,6 +493,10 @@ void BrowserPageWidget::onLoadFinished(bool ok)
         }
     }
 
+    // 版本差异（Qt5 无 loadingChanged 明细，需在 loadFinished 兜底发 loadFailed）
+    // 收敛在私有实现中，公开类不感知。
+    d->handleLoadFinished(ok);
+
     d->updateNavigationState();
     emit loadFinished(ok && !d->timedOut_);
 }
@@ -535,5 +542,3 @@ void BrowserPageWidget::onLoadTimeout()
 }
 
 } // namespace bm
-
-

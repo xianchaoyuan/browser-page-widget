@@ -2,6 +2,7 @@
 #define BROWSERPAGEWIDGET_H
 
 #include "browserpagewidgetglobal.h"
+#include "browserqtcompat.h"
 
 #include <QScopedPointer>
 #include <QSet>
@@ -9,10 +10,8 @@
 #include <QStringList>
 #include <QUrl>
 #include <QWebEngineCertificateError>
-#include <QWebEnginePermission>
 #include <QWidget>
 
-class QWebEngineDownloadRequest;
 class QWebEnginePage;
 class QWebEngineProfile;
 class QWebEngineView;
@@ -27,6 +26,9 @@ class BrowserPageWidgetPrivate;
  * 这个类把 QWebEngineView 包装成一个更完整的 QWidget：自带工具栏、地址栏、
  * 状态栏、加载超时、导航白名单、弹窗策略、下载策略、权限策略和证书策略。
  * 默认策略遵循最小权限原则：拒绝未知协议、证书错误、网页权限与下载。
+ *
+ * 一套源码同时支持 Qt 5.15 与 Qt 6（≥6.2），宿主程序不需要写任何
+ * #if QT_VERSION 分支；版本差异全部收敛在私有实现与 browserqtcompat.h 中。
  */
 class BROWSERPAGEWIDGET_PUBLIC BrowserPageWidget final : public QWidget
 {
@@ -375,9 +377,42 @@ public slots:
     void resetZoom();
 
     /**
+     * @brief 打开或关闭开发者工具窗口。
+     *
+     * 首次调用会创建独立的 DevTools 窗口，再次调用则切换显示状态。
+     * 默认快捷键 F12。
+     */
+    void toggleDevTools();
+
+    /**
+     * @brief 进入「检查元素」拾取模式。
+     *
+     * DevTools 未打开时会先打开。拾取模式下点击页面元素，
+     * DevTools 会直接定位到对应 DOM 节点，适合排查资源加载类问题。
+     */
+    void inspectElement();
+
+    /**
      * @brief 清理当前 Profile 的历史、Cookie、缓存和当前页面存储。
      */
     void clearBrowsingData();
+
+    /**
+     * @brief 授权一个 permissionRequested() 信号上报的网页权限。
+     *
+     * 权限模型是「来源 + Feature」二元组；宿主在收到 permissionRequested()
+     * 信号后调用本函数完成授权。
+     * @param origin 请求来源地址。
+     * @param feature QWebEnginePage::Feature 枚举值。
+     */
+    void grantPermission(const QUrl &origin, int feature);
+
+    /**
+     * @brief 拒绝一个 permissionRequested() 信号上报的网页权限。
+     * @param origin 请求来源地址。
+     * @param feature QWebEnginePage::Feature 枚举值。
+     */
+    void denyPermission(const QUrl &origin, int feature);
 
 signals:
     /** @brief 主页地址变化时发出。 */
@@ -416,7 +451,12 @@ signals:
     /** @brief 页面加载结束时发出。 */
     void loadFinished(bool ok);
 
-    /** @brief 页面加载失败时发出。 */
+    /**
+     * @brief 页面加载失败时发出。
+     *
+     * @note Qt 5 的 WebEngine（Chromium 83）不提供加载失败明细，
+     * 该版本下 errorDomain 与 errorCode 恒为 -1，详细原因请看 errorString。
+     */
     void loadFailed(const QUrl &url, int errorDomain, int errorCode,
                     const QString &errorString);
 
@@ -441,7 +481,8 @@ signals:
 
     /**
      * @brief 将证书错误交给宿主处理。
-     * @warning 宿主必须调用 acceptCertificate() 或 rejectCertificate()。
+     * @warning 宿主必须调用 bm::acceptCertificateError()（放行）或
+     * rejectCertificate()（拒绝），否则请求会一直挂起。
      */
     void certificateErrorRequested(QWebEngineCertificateError error);
 
@@ -450,9 +491,13 @@ signals:
 
     /**
      * @brief 将网页权限请求交给宿主处理。
-     * @warning 宿主必须调用 grant() 或 deny()。
+     *
+     * 宿主必须调用 grantPermission() 或 denyPermission() 完成应答，
+     * 否则请求会一直挂起。
+     * @param origin 请求来源地址。
+     * @param feature QWebEnginePage::Feature 枚举值。
      */
-    void permissionRequested(QWebEnginePermission permission);
+    void permissionRequested(const QUrl &origin, int feature);
 
     /** @brief WebEngine 渲染进程异常终止时发出。 */
     void renderProcessTerminated(int terminationStatus, int exitCode);
@@ -464,7 +509,7 @@ signals:
      * @brief 将下载请求交给宿主处理。
      * @warning 宿主必须调用 accept() 或 cancel()。
      */
-    void downloadRequested(QWebEngineDownloadRequest *download);
+    void downloadRequested(bm::BrowserDownloadItem *download);
 
     /** @brief 自动保存下载开始时发出。 */
     void downloadStarted(quint32 id, const QUrl &url, const QString &filePath);

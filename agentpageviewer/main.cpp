@@ -5,6 +5,7 @@
 #include <QApplication>
 #include <QCoreApplication>
 #include <QDebug>
+#include <QIcon>
 #include <QTimer>
 #include <QUrl>
 
@@ -19,7 +20,7 @@ QUrl agentPageUrl(const QStringList &arguments)
         return QUrl::fromUserInput(arguments.at(1));
     }
 
-    return QUrl(QStringLiteral("http://127.0.0.1:19001/"));
+    return QUrl(QStringLiteral("http://127.0.0.1:3080/?token=_f9n7u9EdV0Mha2oZhCqERV27_ntczWUTBqb28-ypn4"));
 }
 
 // 统一连接浏览器事件，主流程只关心“什么时候打开浏览器”。

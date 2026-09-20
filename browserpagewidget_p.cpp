@@ -6,6 +6,7 @@
 #include <QAction>
 #include <QDebug>
 #include <QHBoxLayout>
+#include <QKeySequence>
 #include <QLabel>
 #include <QLineEdit>
 #include <QProgressBar>
@@ -15,14 +16,30 @@
 #include <QTimer>
 #include <QToolBar>
 #include <QVBoxLayout>
+#include <QWebEngineCookieStore>
 #include <QWebEngineHistory>
-#include <QWebEngineLoadingInfo>
 #include <QWebEnginePage>
 #include <QWebEngineProfile>
 #include <QWebEngineSettings>
 #include <QWebEngineView>
 
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+#include <QWebEngineLoadingInfo>
+#endif
+
 namespace bm {
+
+namespace {
+
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+// Qt6 权限缓存表键：origin|feature，与 grantPermission()/denyPermission() 查表应答一致。
+QString permissionKey(const QUrl &origin, int feature)
+{
+    return origin.toString() + QLatin1Char('|') + QString::number(feature);
+}
+#endif
+
+} // namespace
 
 BrowserPageWidgetPrivate::BrowserPageWidgetPrivate(BrowserPageWidget *q,
                                                    QWebEngineProfile *profile,
@@ -61,6 +78,15 @@ BrowserPageWidgetPrivate::BrowserPageWidgetPrivate(BrowserPageWidget *q,
 
 BrowserPageWidgetPrivate::~BrowserPageWidgetPrivate() noexcept
 {
+    // DevTools 页面引用被检查页面，必须先于 view_ 断开并销毁，
+    // 否则销毁顺序颠倒时 Chromium 可能访问已经释放的 inspected page。
+    if (devToolsWindow_ && view_ && view_->page()) {
+        view_->page()->setDevToolsPage(nullptr);
+    }
+    delete devToolsWindow_;
+    devToolsWindow_ = nullptr;
+    devToolsView_ = nullptr;
+
     // QWebEnginePage 必须先于其 Profile 销毁，否则 Chromium 可能访问失效资源。
     delete view_;
     view_ = nullptr;
@@ -136,6 +162,19 @@ void BrowserPageWidgetPrivate::setupUi()
     view_ = new QWebEngineView(q);
     view_->setObjectName(QStringLiteral("browserWebEngineView"));
 
+    // F12 切换开发者工具，方便宿主和现场排查页面问题（如媒体加载被拒）。
+    // 注意：Qt 5.15 没有 QWebEngineView::createStandardContextMenu()（Qt 6 API），
+    // 因此不接管右键菜单，保留 WebEngine 默认菜单；元素拾取可在 DevTools
+    // 工具栏内完成，或由宿主调用 inspectElement() 进入拾取模式。
+    QAction *devToolsShortcut = new QAction(q);
+    devToolsShortcut->setObjectName(QStringLiteral("browserDevToolsAction"));
+    devToolsShortcut->setShortcut(QKeySequence(Qt::Key_F12));
+    devToolsShortcut->setShortcutContext(Qt::WidgetWithChildrenShortcut);
+    devToolsShortcut->setText(q->tr("开发者工具"));
+    q->addAction(devToolsShortcut);
+    QObject::connect(devToolsShortcut, &QAction::triggered,
+                     q, &BrowserPageWidget::toggleDevTools);
+
     // 底部状态栏用于显示加载状态、链接悬停地址和下载进度。
     statusBar_ = new QWidget(q);
     statusBar_->setObjectName(QStringLiteral("browserStatusBar"));
@@ -172,7 +211,7 @@ void BrowserPageWidgetPrivate::setupUi()
 
 void BrowserPageWidgetPrivate::setupWebEngine()
 {
-    // 自定义 Page 负责导航拦截、弹窗接管和控制台日志转发。
+    // 自定义 Page 负责导航拦截、弹窗接管、证书策略和控制台日志转发。
     view_->setPage(new BrowserWebPage(profile_, this, view_));
 
     // 默认关闭高风险能力，只按桌面业务需要保留基础浏览能力。
@@ -189,13 +228,15 @@ void BrowserPageWidgetPrivate::setupWebEngine()
     settings->setAttribute(QWebEngineSettings::AllowRunningInsecureContent, false);
     settings->setAttribute(QWebEngineSettings::AllowGeolocationOnInsecureOrigins, false);
     settings->setAttribute(QWebEngineSettings::PdfViewerEnabled, true);
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+    // 以下为 Qt6 增强项，Qt5（Chromium 83）无对应 API，静默缺失、无语义破坏。
     settings->setAttribute(QWebEngineSettings::NavigateOnDropEnabled, false);
-    settings->setUnknownUrlSchemePolicy(QWebEngineSettings::DisallowUnknownUrlSchemes);
-
     // 只有控件自建的 Profile 才在这里设置权限持久化策略，避免改动宿主传入的共享 Profile。
     if (ownsProfile_) {
         profile_->setPersistentPermissionsPolicy(QWebEngineProfile::PersistentPermissionsPolicy::AskEveryTime);
     }
+#endif
+    settings->setUnknownUrlSchemePolicy(QWebEngineSettings::DisallowUnknownUrlSchemes);
 }
 
 void BrowserPageWidgetPrivate::setupConnections()
@@ -235,11 +276,6 @@ void BrowserPageWidgetPrivate::setupConnections()
                      q, [this](const QString &url) {
                          statusLabel_->setText(url.isEmpty() ? statusMessage_ : url);
                      });
-    // loadingChanged 能提供更详细的失败信息，比 loadFinished(false) 更适合生成错误信号。
-    QObject::connect(view_->page(), &QWebEnginePage::loadingChanged,
-                     q, [this](const QWebEngineLoadingInfo &loadingInfo) {
-                         handleLoadingInfo(loadingInfo);
-                     });
     QObject::connect(
         // Chromium 渲染进程崩溃时要立即停止加载状态，避免 UI 一直显示正在加载。
         view_->page(), &QWebEnginePage::renderProcessTerminated,
@@ -254,43 +290,61 @@ void BrowserPageWidgetPrivate::setupConnections()
             emit q->renderProcessTerminated(static_cast<int>(status), exitCode);
         });
 
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+    // Qt6：loadingChanged 能提供更详细的失败信息，比 loadFinished(false) 更适合生成错误信号。
+    QObject::connect(view_->page(), &QWebEnginePage::loadingChanged,
+                     q, [this](const QWebEngineLoadingInfo &loadingInfo) {
+                         handleLoadingInfo(loadingInfo);
+                     });
+    // Qt6：证书错误通过信号进入统一处理。
     QObject::connect(
-        // 证书错误默认拒绝；只有显式委托时才把决定权交给宿主。
         view_->page(), &QWebEnginePage::certificateError,
         q, [this](const QWebEngineCertificateError &error) {
-            Q_Q(BrowserPageWidget);
-            QWebEngineCertificateError request(error);
-
-            // defer() 将决定权移交给宿主；未委托时始终执行明确拒绝。
-            if (certificatePolicy_
-                == BrowserPageWidget::CertificatePolicy::DelegateToApplication) {
-                request.defer();
-                emit q->certificateErrorRequested(request);
-            } else {
-                request.rejectCertificate();
-                emit q->certificateRejected(request.url(), request.description());
-            }
+            handleCertificateError(error);
         });
+    // Qt6：网页权限走 QWebEnginePermission 新 API（Qt 6.8 起
+    // featurePermissionRequested/setFeaturePermission 已标记弃用）。
     QObject::connect(
-        // 网页权限默认拒绝，避免网页默认拿到摄像头、麦克风等敏感能力。
         view_->page(), &QWebEnginePage::permissionRequested,
         q, [this](QWebEnginePermission permission) {
             Q_Q(BrowserPageWidget);
+            const QUrl origin = permission.origin();
+            const int feature = static_cast<int>(permission.permissionType());
             if (permissionPolicy_
                 == BrowserPageWidget::PermissionPolicy::DelegateToApplication) {
-                emit q->permissionRequested(permission);
+                // 缓存待应答的 permission 对象，宿主稍后通过
+                // grantPermission()/denyPermission() 查表应答。
+                pendingPermissions_.insert(permissionKey(origin, feature), permission);
+                emit q->permissionRequested(origin, feature);
             } else {
                 permission.deny();
-                emit q->permissionDenied(
-                    permission.origin(),
-                    static_cast<int>(permission.permissionType()));
+                emit q->permissionDenied(origin, feature);
             }
         });
+#else
+    // Qt5：无 loadingChanged/证书错误信号；证书错误由 BrowserWebPage 的
+    // certificateError() 虚函数接管（见 browserwebpage_p.cpp），策略判断一致。
+    // Qt5：权限模型是 featurePermissionRequested + setFeaturePermission。
+    QObject::connect(
+        view_->page(), &QWebEnginePage::featurePermissionRequested,
+        q, [this](const QUrl &securityOrigin, QWebEnginePage::Feature feature) {
+            Q_Q(BrowserPageWidget);
+            if (permissionPolicy_
+                == BrowserPageWidget::PermissionPolicy::DelegateToApplication) {
+                emit q->permissionRequested(securityOrigin,
+                                            static_cast<int>(feature));
+            } else {
+                view_->page()->setFeaturePermission(
+                    securityOrigin, feature, QWebEnginePage::PermissionDeniedByUser);
+                emit q->permissionDenied(securityOrigin, static_cast<int>(feature));
+            }
+        });
+#endif
 
     QObject::connect(
         // 下载请求属于 Profile 级别信号，统一交给下载管理器按策略处理。
         profile_, &QWebEngineProfile::downloadRequested,
-        q, [this](QWebEngineDownloadRequest *download) {
+        q, [this](bm::BrowserDownloadItem *download) {
             downloadManager_->handleDownloadRequested(download);
         });
 }
@@ -346,6 +400,20 @@ void BrowserPageWidgetPrivate::handleNavigationBlocked(const QUrl &url,
     emit q->navigationBlocked(url, reason);
 }
 
+void BrowserPageWidgetPrivate::handleLoadFinished(bool ok)
+{
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
+    Q_Q(BrowserPageWidget);
+    // Qt 5 没有 QWebEngineLoadingInfo，错误域和错误码只能填占位值 -1。
+    if (!timedOut_ && !ok && loadState_ == BrowserPageWidget::LoadState::Failed) {
+        emit q->loadFailed(q->currentUrl(), -1, -1, q->tr("网页加载失败"));
+    }
+#else
+    Q_UNUSED(ok)
+#endif
+}
+
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
 void BrowserPageWidgetPrivate::handleLoadingInfo(const QWebEngineLoadingInfo &loadingInfo)
 {
     Q_Q(BrowserPageWidget);
@@ -368,6 +436,7 @@ void BrowserPageWidgetPrivate::handleLoadingInfo(const QWebEngineLoadingInfo &lo
                            error);
     }
 }
+#endif
 
 void BrowserPageWidgetPrivate::handleJavaScriptConsoleMessage(int level,
                                                               const QString &message,
@@ -394,5 +463,148 @@ void BrowserPageWidgetPrivate::handleJavaScriptConsoleMessage(int level,
         level, message, lineNumber, sourceId);
 }
 
-} // namespace bm
+void BrowserPageWidgetPrivate::clearBrowsingData()
+{
+    Q_Q(BrowserPageWidget);
+    if (!profile_) {
+        return;
+    }
 
+    // localStorage/sessionStorage 属于当前页面，只能通过页面脚本清理。
+    if (QWebEnginePage *currentPage = q->page()) {
+        currentPage->runJavaScript(QStringLiteral(
+            "try { localStorage.clear(); sessionStorage.clear(); } catch (e) {}"));
+    }
+    // history、cookie、http cache 分别属于不同对象，需要分开清理。
+    if (view_ && view_->history()) {
+        view_->history()->clear();
+    }
+    if (profile_->cookieStore()) {
+        profile_->cookieStore()->deleteAllCookies();
+    }
+
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+    // HTTP 缓存清理是异步的，完成后再通知宿主（准确异步语义）。
+    QObject::connect(profile_, &QWebEngineProfile::clearHttpCacheCompleted,
+                     q, &BrowserPageWidget::browsingDataCleared,
+                     Qt::SingleShotConnection);
+    profile_->clearHttpCache();
+#else
+    // Qt 5 的 QWebEngineProfile 没有 clearHttpCacheCompleted 完成信号，
+    // 无法像 Qt 6 那样等缓存真正清完再通知；这里在发起清理后立即通知宿主。
+    profile_->clearHttpCache();
+    emit q->browsingDataCleared();
+#endif
+}
+
+void BrowserPageWidgetPrivate::grantPermission(const QUrl &origin, int feature)
+{
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+    const QString key = permissionKey(origin, feature);
+    const auto it = pendingPermissions_.find(key);
+    if (it != pendingPermissions_.end()) {
+        it->grant();
+        pendingPermissions_.erase(it);
+    }
+#else
+    if (QWebEnginePage *currentPage = view_ ? view_->page() : nullptr) {
+        currentPage->setFeaturePermission(
+            origin,
+            static_cast<QWebEnginePage::Feature>(feature),
+            QWebEnginePage::PermissionGrantedByUser);
+    }
+#endif
+}
+
+void BrowserPageWidgetPrivate::denyPermission(const QUrl &origin, int feature)
+{
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+    const QString key = permissionKey(origin, feature);
+    const auto it = pendingPermissions_.find(key);
+    if (it != pendingPermissions_.end()) {
+        it->deny();
+        pendingPermissions_.erase(it);
+    }
+#else
+    if (QWebEnginePage *currentPage = view_ ? view_->page() : nullptr) {
+        currentPage->setFeaturePermission(
+            origin,
+            static_cast<QWebEnginePage::Feature>(feature),
+            QWebEnginePage::PermissionDeniedByUser);
+    }
+#endif
+}
+
+bool BrowserPageWidgetPrivate::handleCertificateError(const QWebEngineCertificateError &error)
+{
+    Q_Q(BrowserPageWidget);
+
+    // defer() 将决定权移交给宿主；未委托时始终执行明确拒绝。
+    if (certificatePolicy_
+        == BrowserPageWidget::CertificatePolicy::DelegateToApplication) {
+        QWebEngineCertificateError request(error);
+        request.defer();
+        emit q->certificateErrorRequested(request);
+        // 已 defer 时返回值不再被使用，统一返回 false 保持“默认拒绝”语义。
+        return false;
+    }
+
+    emit q->certificateRejected(error.url(),
+                                bm::certificateErrorDescription(error));
+    return false;
+}
+
+void BrowserPageWidgetPrivate::ensureDevTools()
+{
+    Q_Q(BrowserPageWidget);
+
+    if (devToolsWindow_) {
+        return;
+    }
+
+    // DevTools 使用独立的顶层窗口，避免挤占页面可视区域。
+    devToolsWindow_ = new QWidget(q);
+    devToolsWindow_->setObjectName(QStringLiteral("browserDevToolsWindow"));
+    devToolsWindow_->setWindowTitle(q->tr("开发者工具"));
+    devToolsWindow_->resize(1000, 640);
+
+    devToolsView_ = new QWebEngineView(devToolsWindow_);
+    devToolsView_->setObjectName(QStringLiteral("browserDevToolsView"));
+    // DevTools 页面显式绑定当前 Profile，与被检查页面保持一致。
+    devToolsView_->setPage(new QWebEnginePage(profile_, devToolsView_));
+    QVBoxLayout *layout = new QVBoxLayout(devToolsWindow_);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->addWidget(devToolsView_);
+
+    // 通过 setDevToolsPage() 挂接；DevTools 页面必须与被检查页面
+    // 使用同一个 Profile，这里直接复用 view_ 的 page。
+    view_->page()->setDevToolsPage(devToolsView_->page());
+}
+
+void BrowserPageWidgetPrivate::toggleDevTools()
+{
+    ensureDevTools();
+
+    if (devToolsWindow_->isVisible()) {
+        devToolsWindow_->hide();
+    } else {
+        devToolsWindow_->show();
+        devToolsWindow_->raise();
+        devToolsWindow_->activateWindow();
+    }
+}
+
+void BrowserPageWidgetPrivate::inspectElement()
+{
+    ensureDevTools();
+
+    if (!devToolsWindow_->isVisible()) {
+        devToolsWindow_->show();
+        devToolsWindow_->raise();
+    }
+
+    // 进入元素拾取模式：下一次点击页面中的元素会在 DevTools 中定位。
+    view_->triggerPageAction(QWebEnginePage::InspectElement);
+}
+
+} // namespace bm

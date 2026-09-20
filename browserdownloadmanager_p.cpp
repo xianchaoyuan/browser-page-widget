@@ -10,7 +10,6 @@
 #include <QProgressBar>
 #include <QStandardPaths>
 #include <QtGlobal>
-#include <QWebEngineDownloadRequest>
 #include <QWebEnginePage>
 #include <QWebEngineView>
 
@@ -28,11 +27,11 @@ struct DownloadProgressState
 };
 
 // 下载进入这些状态后不会再恢复，可用于收尾和释放临时对象。
-bool isTerminalDownloadState(QWebEngineDownloadRequest::DownloadState state)
+bool isTerminalDownloadState(bm::BrowserDownloadItem::DownloadState state)
 {
-    return state == QWebEngineDownloadRequest::DownloadCompleted
-           || state == QWebEngineDownloadRequest::DownloadInterrupted
-           || state == QWebEngineDownloadRequest::DownloadCancelled;
+    return state == bm::BrowserDownloadItem::DownloadCompleted
+           || state == bm::BrowserDownloadItem::DownloadInterrupted
+           || state == bm::BrowserDownloadItem::DownloadCancelled;
 }
 
 // 判断下载是否来自当前控件，防止共享 Profile 时误处理其他页面的下载。
@@ -52,7 +51,7 @@ bool pageBelongsToCurrentView(QWebEnginePage *page, QWebEnginePage *mainPage)
     return false;
 }
 
-void deleteTransientPageWhenDownloadDone(QWebEngineDownloadRequest *download,
+void deleteTransientPageWhenDownloadDone(bm::BrowserDownloadItem *download,
                                          QWebEnginePage *mainPage)
 {
     QWebEnginePage *downloadPage = download ? download->page() : nullptr;
@@ -61,9 +60,9 @@ void deleteTransientPageWhenDownloadDone(QWebEngineDownloadRequest *download,
     }
 
     // target="_blank" 直接触发下载时不会再产生有效 URL，需要在下载结束后回收临时 Page。
-    QObject::connect(download, &QWebEngineDownloadRequest::stateChanged,
+    QObject::connect(download, &bm::BrowserDownloadItem::stateChanged,
                      downloadPage,
-                     [downloadPage](QWebEngineDownloadRequest::DownloadState state) {
+                     [downloadPage](bm::BrowserDownloadItem::DownloadState state) {
                          if (isTerminalDownloadState(state)) {
                              downloadPage->deleteLater();
                          }
@@ -140,7 +139,7 @@ QString BrowserDownloadManager::defaultDownloadDirectory()
     return QDir::cleanPath(directory);
 }
 
-void BrowserDownloadManager::handleDownloadRequested(QWebEngineDownloadRequest *download)
+void BrowserDownloadManager::handleDownloadRequested(bm::BrowserDownloadItem *download)
 {
     if (!download) {
         return;
@@ -197,30 +196,42 @@ void BrowserDownloadManager::handleDownloadRequested(QWebEngineDownloadRequest *
             id, download->receivedBytes(), download->totalBytes());
     };
 
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+    // Qt6：receivedBytes/totalBytes 分别有变更信号，共用同一进度处理逻辑。
     QObject::connect(download,
-                     &QWebEngineDownloadRequest::receivedBytesChanged,
+                     &bm::BrowserDownloadItem::receivedBytesChanged,
                      q,
                      emitProgress);
     QObject::connect(download,
-                     &QWebEngineDownloadRequest::totalBytesChanged,
+                     &bm::BrowserDownloadItem::totalBytesChanged,
                      q,
                      emitProgress);
-    QObject::connect(download, &QWebEngineDownloadRequest::stateChanged, q, [this, q, download, id, filePath](
-                         QWebEngineDownloadRequest::DownloadState state) {
-                         if (state == QWebEngineDownloadRequest::DownloadCompleted) {
+#else
+    // Qt5：没有 receivedBytesChanged/totalBytesChanged 两个信号，
+    // 统一挂在 downloadProgress 上；进度数值仍以 getter 为准。
+    QObject::connect(download,
+                     &bm::BrowserDownloadItem::downloadProgress,
+                     q,
+                     [emitProgress](qint64, qint64) {
+                         emitProgress();
+                     });
+#endif
+    QObject::connect(download, &bm::BrowserDownloadItem::stateChanged, q, [this, q, download, id, filePath](
+                         bm::BrowserDownloadItem::DownloadState state) {
+                         if (state == bm::BrowserDownloadItem::DownloadCompleted) {
                              finishDownloadProgress(browser_, q->tr("下载完成：%1").arg(filePath));
                              emit q->downloadFinished(id, filePath);
                              return;
                          }
 
-                         if (state == QWebEngineDownloadRequest::DownloadInterrupted) {
+                         if (state == bm::BrowserDownloadItem::DownloadInterrupted) {
                              const QString reason = download->interruptReasonString();
                              finishDownloadProgress(browser_, q->tr("下载失败：%1").arg(reason));
                              emit q->downloadFailed(id, reason);
                              return;
                          }
 
-                         if (state == QWebEngineDownloadRequest::DownloadCancelled) {
+                         if (state == bm::BrowserDownloadItem::DownloadCancelled) {
                              const QString reason = q->tr("下载已取消");
                              finishDownloadProgress(browser_, q->tr("下载失败：%1").arg(reason));
                              emit q->downloadFailed(id, reason);

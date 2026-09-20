@@ -5,6 +5,13 @@
 #include "browserpagepolicy.h"
 
 #include <QScopedPointer>
+#include <QString>
+
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+#include <QHash>
+#include <QWebEnginePermission>
+class QWebEngineLoadingInfo;
+#endif
 
 class QAction;
 class QLabel;
@@ -12,7 +19,6 @@ class QLineEdit;
 class QProgressBar;
 class QTimer;
 class QToolBar;
-class QWebEngineLoadingInfo;
 class QWebEngineProfile;
 class QWebEngineView;
 
@@ -24,6 +30,7 @@ class BrowserDownloadManager;
  * @brief BrowserPageWidget 的内部状态。
  *
  * 该文件不是公开 API，不应被业务工程直接包含。
+ * 双版本差异以 #if QT_VERSION 分支收敛在本文件与对应 .cpp 中。
  */
 class BrowserPageWidgetPrivate final
 {
@@ -86,15 +93,68 @@ public:
     void handleNavigationBlocked(const QUrl &url, const QString &reason);
 
     /**
-     * @brief 处理 WebEngine 提供的详细加载信息。
-     */
-    void handleLoadingInfo(const QWebEngineLoadingInfo &loadingInfo);
-
-    /**
      * @brief 处理网页 JavaScript 控制台消息。
      */
     void handleJavaScriptConsoleMessage(int level, const QString &message,
                                         int lineNumber, const QString &sourceId);
+
+    /**
+     * @brief 处理页面加载结束后的失败兜底通知。
+     *
+     * Qt 5 没有 QWebEngineLoadingInfo，加载失败明细只能在此兜底发出
+     * loadFailed()（errorDomain/errorCode 恒为 -1）；Qt 6 的 loadFailed()
+     * 已由 handleLoadingInfo() 发出，本函数为空操作。
+     */
+    void handleLoadFinished(bool ok);
+
+    /**
+     * @brief 处理 WebEngine 提供的详细加载信息（仅 Qt 6）。
+     */
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+    void handleLoadingInfo(const QWebEngineLoadingInfo &loadingInfo);
+#endif
+
+    /**
+     * @brief 清理历史、Cookie、HTTP 缓存并在完成后发出 browsingDataCleared()。
+     *
+     * Qt 6 等 clearHttpCacheCompleted 完成信号（准确异步语义）；
+     * Qt 5 无完成信号，发起清理后立即通知（能力降级，文档已注明）。
+     */
+    void clearBrowsingData();
+
+    /**
+     * @brief 授权一个网页权限请求（内部实现按版本走双轨）。
+     */
+    void grantPermission(const QUrl &origin, int feature);
+
+    /**
+     * @brief 拒绝一个网页权限请求（内部实现按版本走双轨）。
+     */
+    void denyPermission(const QUrl &origin, int feature);
+
+    /**
+     * @brief 统一处理 HTTPS 证书错误。
+     *
+     * Qt 6 由 certificateError 信号回调进入，Qt 5 由 BrowserWebPage 的
+     * certificateError() 虚函数进入，策略判断与应答逻辑完全一致。
+     * 返回 false 保持“默认拒绝”语义（defer 后返回值不再被使用）。
+     */
+    bool handleCertificateError(const QWebEngineCertificateError &error);
+
+    /**
+     * @brief 确保 DevTools 窗口已创建并挂接到当前页面。
+     */
+    void ensureDevTools();
+
+    /**
+     * @brief 打开或关闭 DevTools 窗口。
+     */
+    void toggleDevTools();
+
+    /**
+     * @brief 进入「检查元素」模式（DevTools 未打开时先打开）。
+     */
+    void inspectElement();
 
     BrowserPageWidget *q_ptr; ///< 公共对象指针，用于私有实现访问 BrowserPageWidget。
 
@@ -115,6 +175,8 @@ public:
     QAction *homeAction_;    ///< 回到主页按钮动作。
 
     QTimer *loadTimeoutTimer_;                 ///< 页面加载超时定时器。
+    QWidget *devToolsWindow_ = nullptr;        ///< 开发者工具独立窗口。
+    QWebEngineView *devToolsView_ = nullptr;   ///< DevTools 渲染视图。
     bool loading_;                             ///< 当前页面是否正在加载。
     bool timedOut_;                            ///< 当前加载是否已经超时。
     BrowserPageWidget::LoadState loadState_;   ///< 当前页面加载状态。
@@ -128,6 +190,10 @@ public:
     BrowserPageWidget::PermissionPolicy permissionPolicy_;   ///< 网页权限请求处理策略。
     BrowserPageWidget::CertificatePolicy certificatePolicy_; ///< HTTPS 证书错误处理策略。
     QString downloadDirectory_;                              ///< 自动保存下载目录。
+
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+    QHash<QString, QWebEnginePermission> pendingPermissions_; ///< Qt6 待应答权限表（键 = origin|feature）。
+#endif
 
     QScopedPointer<BrowserDownloadManager> downloadManager_; ///< 下载请求处理器。
 };

@@ -13,8 +13,8 @@ int main(int argc, char *argv[])
     QApplication::setOrganizationName(QStringLiteral("BM"));
 
     bm::BrowserPageWidget browser;
-    browser.setWindowTitle(QStringLiteral("BrowserPageWidget Qt6 Example"));
-    browser.setHomeUrl(QStringLiteral("http://127.0.0.1:19001/"));
+    browser.setWindowTitle(QStringLiteral("BrowserPageWidget Example"));
+    browser.setHomeUrl(QStringLiteral("http://127.0.0.1:9119/"));
     browser.setLoadTimeoutMs(30000);
     browser.setToolbarVisible(false);
     browser.setPopupPolicy(bm::BrowserPageWidget::PopupPolicy::OpenInCurrentView);

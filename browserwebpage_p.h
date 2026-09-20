@@ -44,6 +44,16 @@ protected:
                                   int lineNumber,
                                   const QString &sourceId) override;
 
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
+    /**
+     * @brief 接管 HTTPS 证书错误并应用证书策略（仅 Qt 5）。
+     *
+     * Qt 5 通过虚函数（而不是 Qt 6 的 certificateError 信号）处理证书错误，
+     * 统一的策略判断和应答逻辑见 BrowserPageWidgetPrivate::handleCertificateError()。
+     */
+    bool certificateError(const QWebEngineCertificateError &error) override;
+#endif
+
 private:
     BrowserPageWidgetPrivate *browser_; ///< 所属浏览器控件的私有状态对象。
     bool transientPopup_;               ///< 当前页面是否是为弹窗临时创建的页面。

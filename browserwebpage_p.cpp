@@ -95,4 +95,14 @@ void BrowserWebPage::javaScriptConsoleMessage(
         static_cast<int>(level), message, lineNumber, sourceId);
 }
 
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
+bool BrowserWebPage::certificateError(const QWebEngineCertificateError &error)
+{
+    // Qt 5 的证书入口：统一交给私有实现处理，与 Qt 6 信号路径共用同一套策略。
+    // 错误对象内部共享同一个控制器，宿主稍后在收到的副本上调用
+    // bm::acceptCertificateError() 或 rejectCertificate() 即可应答原始请求。
+    return browser_->handleCertificateError(error);
+}
+#endif
+
 } // namespace bm

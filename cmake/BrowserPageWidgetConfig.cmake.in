@@ -2,11 +2,22 @@
 
 include(CMakeFindDependencyMacro)
 
-find_dependency(Qt6 COMPONENTS
-    Widgets
-    WebEngineCore
-    WebEngineWidgets
-)
+# 记录构建时实际使用的 Qt 大版本，供下游校验。
+set(BrowserPageWidget_QT_MAJOR "@BPW_QT_MAJOR@")
+
+if(BrowserPageWidget_QT_MAJOR STREQUAL "6")
+    find_dependency(Qt6 COMPONENTS
+        Widgets
+        WebEngineCore
+        WebEngineWidgets
+    )
+else()
+    find_dependency(Qt5 5.15 COMPONENTS
+        Widgets
+        WebEngineCore
+        WebEngineWidgets
+    )
+endif()
 
 include("${CMAKE_CURRENT_LIST_DIR}/browserpagewidgetTargets.cmake")
 
