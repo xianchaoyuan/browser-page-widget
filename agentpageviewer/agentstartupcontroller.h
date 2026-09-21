@@ -2,10 +2,13 @@
 #define AGENTSTARTUPCONTROLLER_H
 
 #include <QObject>
+#include <QElapsedTimer>
 #include <QUrl>
 
 class AgentStartupSplash;
 class ProcessJob;
+class QTemporaryFile;
+class QTimer;
 
 /**
  * @brief 管理 AgentPageViewer 启动阶段的服务检查、服务启动和端口等待。
@@ -23,10 +26,12 @@ public:
      * @param pageUrl 需要打开的 Agent 页面地址。
      * @param splash 启动画面，用于显示当前启动状态。
      * @param parent Qt 父对象。
+     * @param serviceDirectory DSH 便携包目录；留空时查找程序旁及开发目录。
      */
     explicit AgentStartupController(const QUrl &pageUrl,
                                     AgentStartupSplash *splash,
-                                    QObject *parent = nullptr);
+                                    QObject *parent = nullptr,
+                                    const QString &serviceDirectory = QString());
 
     /** @brief 析构时会停止由本程序拉起的 Agent 进程树。 */
     ~AgentStartupController() override;
@@ -38,8 +43,11 @@ public:
     void stopService();
 
 signals:
-    /** @brief 服务已就绪，或者已决定继续打开页面。 */
-    void readyToOpenPage();
+    /** @brief 服务已就绪，传出本次启动的页面地址。 */
+    void readyToOpenPage(const QUrl &url);
+
+    /** @brief 启动失败或所属服务异常退出。 */
+    void startupFailed(const QString &message);
 
 private:
     /** @brief 记录程序目录、服务目录、目标页面等启动诊断信息。 */
@@ -54,12 +62,29 @@ private:
     /** @brief 服务启动命令发出后，异步等待目标端口就绪。 */
     void waitForServiceReady();
 
+    /** @brief 从本次服务输出获取包含 token 的地址，再检查端口。 */
+    void waitForStartupAddress();
+
+    /** @brief 记录失败并停止本程序启动的服务。 */
+    void failStartup(const QString &message);
+
+    /** @brief 向服务诊断日志追加信息，沿用原有目录回退。 */
+    void appendServiceLog(const QString &message) const;
+
     /** @brief 只发送一次 readyToOpenPage 信号，防止重复打开主界面。 */
     void finishStartup();
 
 private:
     /** @brief 即将打开的 Agent 页面地址。 */
     QUrl pageUrl_;
+
+    /** @brief DSH 便携包根目录。 */
+    QString serviceDirectory_;
+
+    /** @brief 本次服务输出与启动地址等待状态。 */
+    QTemporaryFile *startupOutput_ = nullptr;
+    QTimer *startupPoll_ = nullptr;
+    QElapsedTimer startupElapsed_;
 
     /** @brief 启动画面，不由本类拥有。 */
     AgentStartupSplash *splash_ = nullptr;

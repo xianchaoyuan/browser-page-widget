@@ -131,7 +131,9 @@ ProcessJob::~ProcessJob()
 
 bool ProcessJob::start(const QString &program,
                        const QStringList &arguments,
-                       const QString &workingDirectory)
+                       const QString &workingDirectory,
+                       const QProcessEnvironment &environment,
+                       const QString &outputFile)
 {
     close();
     lastErrorString_.clear();
@@ -154,6 +156,33 @@ bool ProcessJob::start(const QString &program,
     startupInfo.dwFlags = STARTF_USESHOWWINDOW;
     startupInfo.wShowWindow = SW_HIDE;
 
+    HANDLE outputHandle = INVALID_HANDLE_VALUE;
+    HANDLE inputHandle = INVALID_HANDLE_VALUE;
+    if (!outputFile.isEmpty()) {
+        SECURITY_ATTRIBUTES attributes{sizeof(SECURITY_ATTRIBUTES), nullptr, TRUE};
+        outputHandle = CreateFileW(reinterpret_cast<LPCWSTR>(outputFile.utf16()),
+                                   GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE,
+                                   &attributes, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+        inputHandle = CreateFileW(L"NUL", GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE,
+                                  &attributes, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+        if (outputHandle == INVALID_HANDLE_VALUE || inputHandle == INVALID_HANDLE_VALUE) {
+            lastErrorString_ = windowsErrorString(GetLastError());
+            if (outputHandle != INVALID_HANDLE_VALUE) CloseHandle(outputHandle);
+            if (inputHandle != INVALID_HANDLE_VALUE) CloseHandle(inputHandle);
+            close();
+            return false;
+        }
+        startupInfo.dwFlags |= STARTF_USESTDHANDLES;
+        startupInfo.hStdOutput = outputHandle;
+        startupInfo.hStdError = outputHandle;
+        startupInfo.hStdInput = inputHandle;
+    }
+    QStringList environmentEntries = environment.toStringList();
+    environmentEntries.sort(Qt::CaseInsensitive);
+    QString environmentBlock = environmentEntries.join(QChar(0));
+    environmentBlock.append(QChar(0));
+    environmentBlock.append(QChar(0));
+
     PROCESS_INFORMATION processInfo;
     ZeroMemory(&processInfo, sizeof(processInfo));
 
@@ -161,14 +190,17 @@ bool ProcessJob::start(const QString &program,
                                         commandLineBuffer.data(),
                                         nullptr,
                                         nullptr,
-                                        FALSE,
-                                        CREATE_SUSPENDED | CREATE_NO_WINDOW,
-                                        nullptr,
+                                        !outputFile.isEmpty(),
+                                        CREATE_SUSPENDED | CREATE_NO_WINDOW | CREATE_UNICODE_ENVIRONMENT,
+                                        const_cast<ushort *>(environmentBlock.utf16()),
                                         workingDirectoryString.empty() ? nullptr : workingDirectoryString.c_str(),
                                         &startupInfo,
                                         &processInfo);
+    const DWORD createError = created ? ERROR_SUCCESS : GetLastError();
+    if (outputHandle != INVALID_HANDLE_VALUE) CloseHandle(outputHandle);
+    if (inputHandle != INVALID_HANDLE_VALUE) CloseHandle(inputHandle);
     if (!created) {
-        lastErrorString_ = windowsErrorString(GetLastError());
+        lastErrorString_ = windowsErrorString(createError);
         close();
         return false;
     }
@@ -206,6 +238,11 @@ bool ProcessJob::start(const QString &program,
 
     return true;
 #else
+    process_->setProcessEnvironment(environment);
+    if (!outputFile.isEmpty()) {
+        process_->setProcessChannelMode(QProcess::MergedChannels);
+        process_->setStandardOutputFile(outputFile, QIODevice::Truncate);
+    }
     process_->setWorkingDirectory(workingDirectory);
     process_->setProgram(program);
     process_->setArguments(arguments);

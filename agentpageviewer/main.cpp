@@ -1,8 +1,11 @@
-﻿#include "browserpagewidget.h"
+#include "browserpagewidget.h"
 #include "agentstartupcontroller.h"
 #include "agentstartupsplash.h"
 
 #include <QApplication>
+#include <QCommandLineParser>
+#include <QDir>
+#include <QMessageBox>
 #include <QCoreApplication>
 #include <QDebug>
 #include <QIcon>
@@ -12,16 +15,6 @@
 #include <memory>
 
 namespace {
-
-// 允许命令行传入页面地址；未传入时使用默认本地 Agent 页面。
-QUrl agentPageUrl(const QStringList &arguments)
-{
-    if (arguments.size() > 1) {
-        return QUrl::fromUserInput(arguments.at(1));
-    }
-
-    return QUrl(QStringLiteral("http://127.0.0.1:3080/?token=_f9n7u9EdV0Mha2oZhCqERV27_ntczWUTBqb28-ypn4"));
-}
 
 // 统一连接浏览器事件，主流程只关心“什么时候打开浏览器”。
 void connectBrowserSignals(bm::BrowserPageWidget *browser, AgentStartupSplash *splash)
@@ -107,13 +100,26 @@ int main(int argc, char *argv[])
     QApplication::setApplicationName(QStringLiteral("RFClaw"));
     QApplication::setOrganizationName(QStringLiteral("BM"));
 
-    const QUrl pageUrl = agentPageUrl(QCoreApplication::arguments());
+    QCommandLineParser parser;
+    parser.setApplicationDescription(QStringLiteral("DeepSeek Harness Qt viewer"));
+    parser.addHelpOption();
+    parser.addOption({QStringLiteral("service-dir"), QStringLiteral("DSH portable directory"), QStringLiteral("directory")});
+    parser.addPositionalArgument(QStringLiteral("url"), QStringLiteral("Optional existing service URL; do not start or stop a service"));
+    parser.process(app);
+    if (parser.positionalArguments().size() > 1) parser.showHelp(1);
+    const QUrl pageUrl = parser.positionalArguments().isEmpty() ? QUrl() : QUrl(parser.positionalArguments().first());
 
     AgentStartupSplash splash(pageUrl);
     splash.setStatus(QStringLiteral("检查服务..."), QStringLiteral(""));
     splash.show();
 
-    AgentStartupController startupController(pageUrl, &splash, &app);
+    AgentStartupController startupController(pageUrl, &splash, &app, parser.value(QStringLiteral("service-dir")));
+    QObject::connect(&app, &QCoreApplication::aboutToQuit, &startupController, &AgentStartupController::stopService);
+    QObject::connect(&startupController, &AgentStartupController::startupFailed, &app, [&](const QString &message) {
+        splash.hide();
+        QMessageBox::critical(nullptr, QStringLiteral("DeepSeek Harness"), message);
+        app.exit(1);
+    });
     std::unique_ptr<bm::BrowserPageWidget> browser;
 
     QObject::connect(&splash, &AgentStartupSplash::cancelRequested,
@@ -123,9 +129,9 @@ int main(int argc, char *argv[])
                      });
 
     QObject::connect(&startupController, &AgentStartupController::readyToOpenPage,
-                     &app, [&]() {
+                     &app, [&](const QUrl &readyUrl) {
                          if (!browser) {
-                             browser = createBrowser(pageUrl, &splash);
+                             browser = createBrowser(readyUrl, &splash);
                              browser->loadUrl(browser->homeUrl());
                              browser->resize(1280, 820);
                          }

@@ -10,6 +10,9 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QRegularExpression>
+#include <QTemporaryFile>
+#include <QTimer>
 #include <QStandardPaths>
 #include <QStringList>
 #include <QtGlobal>
@@ -21,32 +24,32 @@ namespace {
 constexpr int kServiceStartupTimeoutMs = 120000;
 
 // 返回服务目录候选路径，优先满足发布包结构，再兼容开发目录结构。
-QStringList openClawServiceDirectoryCandidates()
+QStringList dshServiceDirectoryCandidates()
 {
     QStringList candidates;
     QDir appDir(QCoreApplication::applicationDirPath());
 
-    // 发布包推荐结构：AgentPageViewer.exe 与 openclaw-service 在同一层目录。
-    candidates.append(QDir::cleanPath(appDir.filePath(QStringLiteral("openclaw-service"))));
+    // 发布包推荐结构：AgentPageViewer.exe 与 dsh-win7-x64 在同一层目录。
+    candidates.append(QDir::cleanPath(appDir.filePath(QStringLiteral("dsh-win7-x64"))));
 
-    // 兼容开发环境：bin/dist/openclaw-service。
-    candidates.append(QDir::cleanPath(appDir.filePath(QStringLiteral("../dist/openclaw-service"))));
+    // 兼容开发环境：bin/dist/dsh-win7-x64。
+    candidates.append(QDir::cleanPath(appDir.filePath(QStringLiteral("../dist/dsh-win7-x64"))));
 
     return candidates;
 }
 
-// 从候选路径中选择真正包含 openclaw.cmd 的服务目录。
-QString openClawServiceDirectory()
+// 从候选路径中选择真正包含 runtime/node.exe 的服务目录。
+QString dshServiceDirectory()
 {
-    const QStringList candidates = openClawServiceDirectoryCandidates();
+    const QStringList candidates = dshServiceDirectoryCandidates();
     for (const QString &candidate : candidates) {
-        if (QFileInfo::exists(QDir(candidate).filePath(QStringLiteral("openclaw.cmd")))) {
+        if (QFileInfo::exists(QDir(candidate).filePath(QStringLiteral("runtime/node.exe")))) {
             return candidate;
         }
     }
 
     return candidates.isEmpty()
-               ? QDir(QCoreApplication::applicationDirPath()).filePath(QStringLiteral("openclaw-service"))
+               ? QDir(QCoreApplication::applicationDirPath()).filePath(QStringLiteral("dsh-win7-x64"))
                : candidates.first();
 }
 
@@ -65,19 +68,6 @@ QString pathForDisplay(const QString &path)
 QString elapsedSecondsText(qint64 elapsedMs)
 {
     return QStringLiteral("已等待 %1 秒").arg(elapsedMs / 1000);
-}
-
-QString commandInterpreterPath()
-{
-    const QString systemRoot = qEnvironmentVariable("SystemRoot");
-    if (!systemRoot.isEmpty()) {
-        const QString cmdPath = QDir(systemRoot).filePath(QStringLiteral("System32/cmd.exe"));
-        if (QFileInfo::exists(cmdPath)) {
-            return QDir::toNativeSeparators(cmdPath);
-        }
-    }
-
-    return QStringLiteral("cmd.exe");
 }
 
 // 创建端口等待器，并保持调用处只关心“等待进度”和“等待结果”。
@@ -100,9 +90,9 @@ void waitForEndpointAsync(const QUrl &url,
     waiter->start();
 }
 
-QString openClawStateDirectory()
+QString dshStateDirectory(const QString &serviceDirectory)
 {
-    return QDir(openClawServiceDirectory()).filePath(QStringLiteral("state"));
+    return QDir(serviceDirectory).filePath(QStringLiteral("data"));
 }
 
 QString serviceLogFileName()
@@ -154,9 +144,9 @@ QString fallbackServiceLogPath()
     return QDir(QCoreApplication::applicationDirPath()).filePath(serviceLogFileName());
 }
 
-QString openClawServiceLogPath()
+QString dshServiceLogPath(const QString &serviceDirectory)
 {
-    const QString primaryPath = writableLogPathInDirectory(openClawStateDirectory());
+    const QString primaryPath = writableLogPathInDirectory(dshStateDirectory(serviceDirectory));
     if (!primaryPath.isEmpty()) {
         return primaryPath;
     }
@@ -164,10 +154,12 @@ QString openClawServiceLogPath()
     return fallbackServiceLogPath();
 }
 
+} // namespace
+
 // 向服务诊断日志追加一行中文信息。
-void appendServiceLog(const QString &message)
+void AgentStartupController::appendServiceLog(const QString &message) const
 {
-    const QString logPath = openClawServiceLogPath();
+    const QString logPath = dshServiceLogPath(serviceDirectory_);
     QFile file(logPath);
     if (!file.open(QIODevice::Append | QIODevice::Text)) {
         qWarning().noquote() << "无法打开 AgentPageViewer 服务日志：" << logPath;
@@ -180,19 +172,20 @@ void appendServiceLog(const QString &message)
     file.write(line.toUtf8());
 }
 
-} // namespace
-
 AgentStartupController::AgentStartupController(const QUrl &pageUrl,
                                                AgentStartupSplash *splash,
-                                               QObject *parent)
+                                               QObject *parent,
+                                               const QString &serviceDirectory)
     : QObject(parent)
     , pageUrl_(pageUrl)
+    , serviceDirectory_(serviceDirectory.isEmpty() ? dshServiceDirectory() : QFileInfo(serviceDirectory).absoluteFilePath())
     , splash_(splash)
     , agentGateway_(new ProcessJob(this))
 {
-    agentGateway_->setFinishedCallback([](int exitCode) {
-        appendServiceLog(QStringLiteral("Agent 启动壳进程结束，退出码=%1。").arg(exitCode));
-        qWarning().noquote() << "Agent 启动壳进程结束：退出码=" << exitCode;
+    agentGateway_->setFinishedCallback([this](int exitCode) {
+        appendServiceLog(QStringLiteral("Agent 服务进程结束，退出码=%1。").arg(exitCode));
+        qWarning().noquote() << "Agent 服务进程结束：退出码=" << exitCode;
+        failStartup(QStringLiteral("DSH 服务已退出，退出码=%1。").arg(exitCode));
     });
 }
 
@@ -203,12 +196,19 @@ AgentStartupController::~AgentStartupController()
 
 void AgentStartupController::start()
 {
+    if (!pageUrl_.isEmpty() && (!pageUrl_.isValid() || pageUrl_.host().isEmpty()
+        || (pageUrl_.scheme() != "http" && pageUrl_.scheme() != "https"))) {
+        failStartup(QStringLiteral("网页地址必须为有效的 HTTP 或 HTTPS 地址。"));
+        return;
+    }
     appendStartupDiagnostics();
     checkEndpointBeforeStart();
 }
 
 void AgentStartupController::stopService()
 {
+    startupFinished_ = true;
+    if (startupPoll_) startupPoll_->stop();
     if (!agentGateway_ || !agentGateway_->isActive()) {
         return;
     }
@@ -219,8 +219,8 @@ void AgentStartupController::stopService()
 
 void AgentStartupController::appendStartupDiagnostics()
 {
-    const QString serviceDir = openClawServiceDirectory();
-    const QString commandPath = QDir(serviceDir).filePath(QStringLiteral("openclaw.cmd"));
+    const QString serviceDir = serviceDirectory_;
+    const QString commandPath = QDir(serviceDir).filePath(QStringLiteral("runtime/node.exe"));
 
     appendServiceLog(QStringLiteral("---------------- AgentPageViewer 启动 ----------------"));
     appendServiceLog(QStringLiteral("程序目录：%1")
@@ -228,13 +228,13 @@ void AgentStartupController::appendStartupDiagnostics()
     appendServiceLog(QStringLiteral("Agent 服务目录：%1")
                          .arg(QDir::toNativeSeparators(serviceDir)));
     appendServiceLog(QStringLiteral("服务日志路径：%1")
-                         .arg(pathForDisplay(openClawServiceLogPath())));
-    appendServiceLog(QStringLiteral("目标页面：%1").arg(pageUrl_.toString()));
+                         .arg(pathForDisplay(dshServiceLogPath(serviceDirectory_))));
+    appendServiceLog(QStringLiteral("目标页面：%1").arg(pageUrl_.toString(QUrl::RemoveQuery)));
     appendServiceLog(QStringLiteral("服务目录候选列表："));
-    for (const QString &candidate : openClawServiceDirectoryCandidates()) {
+    for (const QString &candidate : dshServiceDirectoryCandidates()) {
         appendServiceLog(QStringLiteral("  %1").arg(QDir::toNativeSeparators(candidate)));
     }
-    appendServiceLog(QStringLiteral("openclaw.cmd 是否存在：%1")
+    appendServiceLog(QStringLiteral("runtime/node.exe 是否存在：%1")
                          .arg(QFileInfo::exists(commandPath) ? QStringLiteral("是") : QStringLiteral("否")));
 }
 
@@ -242,6 +242,15 @@ void AgentStartupController::checkEndpointBeforeStart()
 {
     if (splash_) {
         splash_->setStatus(QStringLiteral("检查服务..."), QStringLiteral(""));
+    }
+
+    if (pageUrl_.isEmpty()) {
+        if (startAgentGateway()) {
+            waitForStartupAddress();
+        } else {
+            failStartup(QStringLiteral("启动 DSH 失败，请检查便携包及服务日志。"));
+        }
+        return;
     }
 
     appendServiceLog(QStringLiteral("启动服务前检查目标页面端口。"));
@@ -254,9 +263,10 @@ void AgentStartupController::checkEndpointBeforeStart()
                              }
                          },
                          [this](bool endpointAvailable) {
+                             if (startupFinished_) return;
                              if (endpointAvailable) {
                                  appendServiceLog(QStringLiteral("目标页面已可连接，跳过 Agent 服务启动。"));
-                                 qInfo().noquote() << "Agent 页面端口已可连接：" << pageUrl_;
+                                 qInfo().noquote() << "Agent 页面端口已可连接：" << pageUrl_.toString(QUrl::RemoveQuery);
                                  if (splash_) {
                                      splash_->setStatus(QStringLiteral("打开页面..."), QStringLiteral(""));
                                  }
@@ -264,49 +274,53 @@ void AgentStartupController::checkEndpointBeforeStart()
                                  return;
                              }
 
-                             appendServiceLog(QStringLiteral("目标页面暂不可连接，准备启动 Agent 服务。"));
-                             if (splash_) {
-                                 splash_->setStatus(QStringLiteral("启动服务..."), QStringLiteral(""));
-                                 splash_->setBusyProgress();
-                             }
-
-                             if (startAgentGateway()) {
-                                 waitForServiceReady();
-                             } else {
-                                 if (splash_) {
-                                     splash_->setStatus(QStringLiteral("启动失败，尝试打开页面..."),
-                                                        QStringLiteral("日志：%1").arg(pathForDisplay(openClawServiceLogPath())));
-                                 }
-                                 finishStartup();
-                             }
+                             failStartup(QStringLiteral("指定的服务地址无法连接，请先启动该服务。"));
                          });
 }
 
 bool AgentStartupController::startAgentGateway()
 {
-    const QString serviceDir = openClawServiceDirectory();
-    const QString commandPath = QDir(serviceDir).filePath(QStringLiteral("openclaw.cmd"));
+    const QString serviceDir = serviceDirectory_;
+    const QString commandPath = QDir(serviceDir).filePath(QStringLiteral("runtime/node.exe"));
 
     appendServiceLog(QStringLiteral("---------------- 请求启动 Agent ----------------"));
 
     if (!QFileInfo::exists(commandPath)) {
-        appendServiceLog(QStringLiteral("未找到启动脚本：%1").arg(commandPath));
-        qWarning().noquote() << "未找到 Agent 服务启动脚本：" << commandPath;
+        appendServiceLog(QStringLiteral("未找到 Node 程序：%1").arg(commandPath));
+        qWarning().noquote() << "未找到 Agent 服务 Node 程序：" << commandPath;
         return false;
     }
 
-    const QString program = commandInterpreterPath();
-    const QStringList arguments{QStringLiteral("/d"),
-                                QStringLiteral("/c"),
-                                QStringLiteral("openclaw.cmd"),
-                                QStringLiteral("gateway")};
+    const QString program = commandPath;
+    const QString entry = QDir(serviceDir).filePath(QStringLiteral("app/node_modules/@deepseek-ai/dsh/lib/bin.js"));
+    if (!QFileInfo::exists(entry)) {
+        appendServiceLog(QStringLiteral("未找到 DSH 入口：%1").arg(entry));
+        return false;
+    }
+    const QString dataDir = dshStateDirectory(serviceDir);
+    if (!QDir().mkpath(dataDir)) return false;
+    startupOutput_ = new QTemporaryFile(QDir(dataDir).filePath(QStringLiteral("qt-startup-XXXXXX.log")), this);
+    if (!startupOutput_->open()) {
+        appendServiceLog(QStringLiteral("无法创建启动输出文件：%1").arg(startupOutput_->errorString()));
+        return false;
+    }
+    startupOutput_->close();
+    auto environment = QProcessEnvironment::systemEnvironment();
+    environment.insert(QStringLiteral("DSH_HOME"), dataDir);
+    environment.remove(QStringLiteral("NODE_PATH"));
+    environment.remove(QStringLiteral("NODE_OPTIONS"));
+    environment.insert(QStringLiteral("PATH"), QDir::toNativeSeparators(QDir(serviceDir).filePath("runtime"))
+                       + QDir::listSeparator() + environment.value(QStringLiteral("PATH")));
+    const QStringList arguments{entry, QStringLiteral("web"), QStringLiteral("--no-open"),
+                                QStringLiteral("--host"), QStringLiteral("127.0.0.1"),
+                                QStringLiteral("--port"), QStringLiteral("0")};
 
-    appendServiceLog(QStringLiteral("正在通过 cmd.exe 启动 Agent"));
+    appendServiceLog(QStringLiteral("正在通过便携包 Node 启动 DSH"));
     appendServiceLog(QStringLiteral("程序：%1").arg(program));
     appendServiceLog(QStringLiteral("参数：%1").arg(arguments.join(QLatin1Char(' '))));
     appendServiceLog(QStringLiteral("工作目录：%1").arg(QDir::toNativeSeparators(serviceDir)));
 
-    if (!agentGateway_->start(program, arguments, serviceDir)) {
+    if (!agentGateway_->start(program, arguments, serviceDir, environment, startupOutput_->fileName())) {
         appendServiceLog(QStringLiteral("Agent 启动失败：%1").arg(agentGateway_->lastErrorString()));
         qWarning().noquote() << "Agent 服务启动失败：" << agentGateway_->lastErrorString();
         return false;
@@ -316,6 +330,46 @@ bool AgentStartupController::startAgentGateway()
                          .arg(agentGateway_->processId()));
     qInfo().noquote() << "Agent 启动进程已创建，PID=" << agentGateway_->processId();
     return true;
+}
+
+void AgentStartupController::waitForStartupAddress()
+{
+    startupElapsed_.start();
+    startupPoll_ = new QTimer(this);
+    startupPoll_->setInterval(100);
+    connect(startupPoll_, &QTimer::timeout, this, [this]() {
+        if (startupFinished_) return;
+        QFile output(startupOutput_->fileName());
+        if (output.open(QIODevice::ReadOnly)) {
+            if (output.size() > 262144) output.seek(output.size() - 262144);
+            static const QRegularExpression pattern(QStringLiteral(
+                "(?:^|[\r\n])dsh web: (http://127\\.0\\.0\\.1:[0-9]+/\\?token=[A-Za-z0-9_-]+)[\r\n]"));
+            const auto match = pattern.match(QString::fromUtf8(output.readAll()));
+            if (match.hasMatch()) {
+                const QUrl url(match.captured(1));
+                if (url.port() > 0 && url.port() <= 65535) {
+                    pageUrl_ = url;
+                    startupPoll_->stop();
+                    waitForServiceReady();
+                    return;
+                }
+            }
+        }
+        if (splash_) splash_->setStatus(QStringLiteral("等待服务地址..."), elapsedSecondsText(startupElapsed_.elapsed()));
+        if (startupElapsed_.elapsed() >= kServiceStartupTimeoutMs) {
+            failStartup(QStringLiteral("等待 DSH 输出启动地址超时。"));
+        }
+    });
+    startupPoll_->start();
+}
+
+void AgentStartupController::failStartup(const QString &message)
+{
+    if (startupOutput_) startupOutput_->setAutoRemove(false);
+    appendServiceLog(message);
+    stopService();
+    emit startupFailed(message + QStringLiteral("\n日志：%1").arg(pathForDisplay(dshServiceLogPath(serviceDirectory_)))
+                       + (startupOutput_ ? QStringLiteral("\n启动输出：%1").arg(pathForDisplay(startupOutput_->fileName())) : QString()));
 }
 
 void AgentStartupController::waitForServiceReady()
@@ -334,13 +388,10 @@ void AgentStartupController::waitForServiceReady()
                              }
                          },
                          [this](bool endpointReady) {
+                             if (startupFinished_) return;
                              if (!endpointReady) {
-                                 appendServiceLog(QStringLiteral("等待 Agent 服务就绪超时，继续尝试打开页面。"));
-                                 qWarning().noquote() << "Agent 页面端口暂未就绪：" << pageUrl_;
-                                 if (splash_) {
-                                     splash_->setStatus(QStringLiteral("服务未就绪，尝试打开页面..."),
-                                                        QStringLiteral("日志：%1").arg(pathForDisplay(openClawServiceLogPath())));
-                                 }
+                                 failStartup(QStringLiteral("等待 Agent 服务就绪超时。"));
+                                 return;
                              } else {
                                  appendServiceLog(QStringLiteral("Agent 服务端口已就绪。"));
                                  if (splash_) {
@@ -359,10 +410,5 @@ void AgentStartupController::finishStartup()
     }
 
     startupFinished_ = true;
-    emit readyToOpenPage();
+    emit readyToOpenPage(pageUrl_);
 }
-
-
-
-
-

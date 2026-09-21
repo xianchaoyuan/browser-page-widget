@@ -2,6 +2,7 @@
 #define PROCESSJOB_H
 
 #include <QObject>
+#include <QProcessEnvironment>
 #include <QString>
 #include <QStringList>
 #include <QtGlobal>
@@ -39,7 +40,9 @@ public:
      */
     bool start(const QString &program,
                const QStringList &arguments,
-               const QString &workingDirectory);
+               const QString &workingDirectory,
+               const QProcessEnvironment &environment = QProcessEnvironment::systemEnvironment(),
+               const QString &outputFile = QString());
 
     /** @brief 关闭进程作业，结束由本类启动的进程树。 */
     void close();
